@@ -17,11 +17,14 @@ public class SoundFx {
     public static final int HIT = 2;
     public static final int NIGHT = 3;
     public static final int NEW_BEST = 4;
-    public static final int KILL_0 = 5; // ..KILL_0 + 7, rising with the combo
+    public static final int LEVELUP = 5;
+    public static final int PICK = 6;
+    public static final int NOVA = 7;
+    public static final int KILL_0 = 8; // ..KILL_0 + 7, rising with the combo
 
     private static final int RATE = 44100;
 
-    private final AudioTrack[] tracks = new AudioTrack[13];
+    private final AudioTrack[] tracks = new AudioTrack[16];
 
     public SoundFx() {
         try {
@@ -31,6 +34,11 @@ public class SoundFx {
             tracks[NIGHT] = make(sweep(440f, 1760f, 0.22f, 0.4f));
             tracks[NEW_BEST] = make(concat(sine(660f, 0.09f, 0.45f),
                     sine(831f, 0.09f, 0.45f), sine(988f, 0.16f, 0.45f)));
+            tracks[LEVELUP] = make(concat(sine(523f, 0.08f, 0.45f),
+                    sine(659f, 0.08f, 0.45f), sine(784f, 0.08f, 0.45f),
+                    sine(1047f, 0.18f, 0.45f)));
+            tracks[PICK] = make(concat(sine(880f, 0.06f, 0.4f), sine(1175f, 0.10f, 0.4f)));
+            tracks[NOVA] = make(sweep(900f, 120f, 0.30f, 0.5f));
             // pentatonic-ish ladder so kill streaks literally sound like climbing
             float[] steps = {523f, 587f, 659f, 784f, 880f, 1047f, 1175f, 1319f};
             for (int i = 0; i < 8; i++) {
