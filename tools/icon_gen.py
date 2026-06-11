@@ -39,49 +39,64 @@ def sample(u, v):
     base = 0.10 + 0.07 * max(0.0, 1.0 - d * 1.2)
     cr, cg, cb = base * 0.55, base * 0.75, base * 1.6
 
-    # BEACON: a warm core at center, one beam of light, shadows with eyes
-    bd = math.hypot(u, v)
+    # TETHER: two orbs joined by a glowing cord that slices a shadow
+    ax, ay = -0.42, 0.38   # white player orb
+    bx2, by2 = 0.45, -0.42 # cyan partner orb
 
-    # beam pointing up-right
-    beam_dir = math.radians(-38)
-    ang = math.atan2(v, u)
-    adiff = abs((ang - beam_dir + math.pi) % (2 * math.pi) - math.pi)
-    if bd > 0.04:
-        beam = math.exp(-((adiff / 0.30) ** 2)) * max(0.0, 1.0 - bd * 0.35)
-        cr += 1.00 * beam * 0.85
-        cg += 0.85 * beam * 0.85
-        cb += 0.45 * beam * 0.85
+    # cord: quadratic bezier with slight sag
+    mx, my = (ax + bx2) / 2 + 0.10, (ay + by2) / 2 + 0.10
+    best_d = 9.9
+    for i in range(33):
+        t = i / 32.0
+        qx_ = (1 - t) ** 2 * ax + 2 * (1 - t) * t * mx + t * t * bx2
+        qy_ = (1 - t) ** 2 * ay + 2 * (1 - t) * t * my + t * t * by2
+        d = math.hypot(u - qx_, v - qy_)
+        if d < best_d:
+            best_d = d
+    cglow = math.exp(-((best_d / 0.10) ** 2)) * 0.7
+    cg += 0.85 * cglow
+    cb += 1.0 * cglow
+    cr += 0.3 * cglow
+    if best_d < 0.025:
+        cr, cg, cb = 0.91, 0.98, 1.0
 
-    # glowing core
-    cglow = math.exp(-((bd / 0.22) ** 2)) * 0.9
-    cr += cglow
-    cg += cglow * 0.92
-    cb += cglow * 0.75
-    if bd < 0.10:
-        cr, cg, cb = 1.0, 0.96, 0.82
-
-    # shadows lurking in the dark (eyes glinting), one caught in the beam
-    shadows = [(-0.52, 0.42, 0.14, False), (-0.30, -0.52, 0.11, False),
-               (0.58, -0.40, 0.13, True)]
-    for sxp, syp, sr, in_beam in shadows:
+    # shadow being cut (split halves either side of the cord)
+    for off in (-0.10, 0.10):
+        sxp, syp = 0.10 + off * 0.7, 0.02 - off * 0.7
         sd = math.hypot(u - sxp, v - syp)
-        if sd < sr:
-            if in_beam:
-                cr, cg, cb = 0.24, 0.21, 0.32
-            else:
-                cr, cg, cb = 0.07, 0.08, 0.15
-        elif in_beam and sd < sr * 1.25:
-            cr, cg, cb = 1.0, 0.82, 0.45  # hot rim
-        # eyes face the light
-        la = math.atan2(-syp, -sxp)
-        for side in (-1, 1):
-            exp_ = sxp + math.cos(la) * sr * 0.35 + math.cos(la + math.pi / 2) * sr * 0.38 * side
-            eyp = syp + math.sin(la) * sr * 0.35 + math.sin(la + math.pi / 2) * sr * 0.38 * side
-            if math.hypot(u - exp_, v - eyp) < sr * 0.16:
-                if in_beam:
-                    cr, cg, cb = 1.0, 0.91, 0.66
-                else:
+        if sd < 0.115 and best_d > 0.035:
+            cr, cg, cb = 0.10, 0.11, 0.20
+            la = math.atan2(ay - syp, ax - sxp)
+            for side in (-1, 1):
+                exp_ = sxp + math.cos(la) * 0.04 + math.cos(la + math.pi / 2) * 0.045 * side
+                eyp = syp + math.sin(la) * 0.04 + math.sin(la + math.pi / 2) * 0.045 * side
+                if math.hypot(u - exp_, v - eyp) < 0.018:
                     cr, cg, cb = 0.56, 0.66, 1.0
+
+    # player orb (white)
+    pd = math.hypot(u - ax, v - ay)
+    pglow = math.exp(-((pd / 0.16) ** 2)) * 0.85
+    cr += pglow
+    cg += pglow
+    cb += pglow
+    if pd < 0.085:
+        cr, cg, cb = 1.0, 1.0, 1.0
+
+    # partner orb (cyan, with motion trail)
+    qd = math.hypot(u - bx2, v - by2)
+    qglow = math.exp(-((qd / 0.18) ** 2)) * 0.8
+    cg += 0.85 * qglow
+    cb += 1.0 * qglow
+    cr += 0.25 * qglow
+    if qd < 0.095:
+        cr, cg, cb = 0.25, 0.90, 1.0
+    for i in range(1, 4):
+        td = math.hypot(u - (bx2 + 0.10 * i), v - (by2 + 0.13 * i))
+        if td < 0.09 * (1.0 - i * 0.22):
+            fade = 0.55 / i
+            cg += fade * 0.85
+            cb += fade
+            cr += fade * 0.2
 
     aa = min(1.0, -plate / 0.02)  # soft edge on the plate
     return (min(cr, 1.0), min(cg, 1.0), min(cb, 1.0), aa)

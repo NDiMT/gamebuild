@@ -1,4 +1,4 @@
-package gr.happyonline.beacon;
+package gr.happyonline.tether;
 
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -15,34 +15,30 @@ public class SoundFx {
     public static final int START = 0;
     public static final int OVER = 1;
     public static final int HIT = 2;
-    public static final int NIGHT = 3;
+    public static final int WAVE = 3;
     public static final int NEW_BEST = 4;
-    public static final int LEVELUP = 5;
-    public static final int PICK = 6;
-    public static final int NOVA = 7;
-    public static final int KILL_0 = 8; // ..KILL_0 + 7, rising with the combo
+    public static final int GEM = 5;
+    public static final int CLANG = 6;
+    public static final int KILL_0 = 7; // ..KILL_0 + 7, rising with the combo
 
     private static final int RATE = 44100;
 
-    private final AudioTrack[] tracks = new AudioTrack[16];
+    private final AudioTrack[] tracks = new AudioTrack[15];
 
     public SoundFx() {
         try {
             tracks[START] = make(sweep(330f, 880f, 0.18f, 0.35f));
             tracks[OVER] = make(noise(0.5f, 0.5f));
             tracks[HIT] = make(thud());
-            tracks[NIGHT] = make(sweep(440f, 1760f, 0.22f, 0.4f));
+            tracks[WAVE] = make(sweep(440f, 1760f, 0.22f, 0.4f));
             tracks[NEW_BEST] = make(concat(sine(660f, 0.09f, 0.45f),
                     sine(831f, 0.09f, 0.45f), sine(988f, 0.16f, 0.45f)));
-            tracks[LEVELUP] = make(concat(sine(523f, 0.08f, 0.45f),
-                    sine(659f, 0.08f, 0.45f), sine(784f, 0.08f, 0.45f),
-                    sine(1047f, 0.18f, 0.45f)));
-            tracks[PICK] = make(concat(sine(880f, 0.06f, 0.4f), sine(1175f, 0.10f, 0.4f)));
-            tracks[NOVA] = make(sweep(900f, 120f, 0.30f, 0.5f));
+            tracks[GEM] = make(sine(1175f, 0.09f, 0.4f));
+            tracks[CLANG] = make(clang());
             // pentatonic-ish ladder so kill streaks literally sound like climbing
             float[] steps = {523f, 587f, 659f, 784f, 880f, 1047f, 1175f, 1319f};
             for (int i = 0; i < 8; i++) {
-                tracks[KILL_0 + i] = make(sine(steps[i], 0.10f, 0.4f));
+                tracks[KILL_0 + i] = make(slice(steps[i]));
             }
         } catch (Exception ignored) {
             // no audio is better than no game
@@ -94,7 +90,36 @@ public class SoundFx {
         return out;
     }
 
-    /** Low punchy thump for taking a hit at the core. */
+    /** A kill: bright tone with a whoosh of noise - the sound of a clean cut. */
+    private static short[] slice(float freq) {
+        int n = (int) (RATE * 0.11f);
+        short[] out = new short[n];
+        Random r = new Random(3);
+        double lp = 0;
+        for (int i = 0; i < n; i++) {
+            double k = (double) i / n;
+            double env = Math.exp(-5.0 * k);
+            lp += ((r.nextDouble() * 2 - 1) - lp) * 0.5;
+            double s = Math.sin(2 * Math.PI * freq * i / RATE) * 0.7 + lp * 0.5;
+            out[i] = (short) (s * env * 0.4 * 32767);
+        }
+        return out;
+    }
+
+    /** Metallic tick for an armored shadow shrugging off a cut. */
+    private static short[] clang() {
+        int n = (int) (RATE * 0.08f);
+        short[] out = new short[n];
+        for (int i = 0; i < n; i++) {
+            double k = (double) i / n;
+            double env = Math.exp(-8.0 * k);
+            double s = Math.sin(2 * Math.PI * 1850 * i / (double) RATE) * 0.6
+                    + Math.sin(2 * Math.PI * 2483 * i / (double) RATE) * 0.4;
+            out[i] = (short) (s * env * 0.3 * 32767);
+        }
+        return out;
+    }
+
     private static short[] thud() {
         int n = (int) (RATE * 0.22f);
         short[] out = new short[n];

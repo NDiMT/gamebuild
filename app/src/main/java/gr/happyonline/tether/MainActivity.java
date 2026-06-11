@@ -1,4 +1,4 @@
-package gr.happyonline.beacon;
+package gr.happyonline.tether;
 
 import android.app.Activity;
 import android.os.Bundle;

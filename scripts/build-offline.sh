@@ -34,13 +34,13 @@ echo "==> aapt2 compile"
 
 echo "==> aapt2 link"
 # the Gradle build supplies the package via 'namespace'; inject it here
-sed 's/<manifest /<manifest package="gr.happyonline.beacon" /' \
+sed 's/<manifest /<manifest package="gr.happyonline.tether" /' \
     "$SRC/AndroidManifest.xml" > "$OUT/AndroidManifest.xml"
 "$AAPT2" link \
     -I "$ANDROID_JAR" \
     --manifest "$OUT/AndroidManifest.xml" \
     --min-sdk-version 21 --target-sdk-version 30 \
-    --version-code 2 --version-name 1.1 \
+    --version-code 1 --version-name 1.0 \
     --java "$OUT/gen" \
     -o "$OUT/apk/base.apk" \
     "$OUT/res.zip"
@@ -60,8 +60,8 @@ echo "==> package + align + sign"
 "$ZIPALIGN" -f 4 "$OUT/apk/base.apk" "$OUT/apk/aligned.apk"
 java -jar "$SIGNER_JAR" --apks "$OUT/apk/aligned.apk" --allowResign >/dev/null
 
-cp "$OUT/apk/aligned-aligned-debugSigned.apk" "$DIST/BEACON.apk" 2>/dev/null \
-    || cp "$OUT/apk/"aligned-*Signed*.apk "$DIST/BEACON.apk"
+cp "$OUT/apk/aligned-aligned-debugSigned.apk" "$DIST/TETHER.apk" 2>/dev/null \
+    || cp "$OUT/apk/"aligned-*Signed*.apk "$DIST/TETHER.apk"
 
-echo "==> done: $DIST/BEACON.apk"
-ls -la "$DIST/BEACON.apk"
+echo "==> done: $DIST/TETHER.apk"
+ls -la "$DIST/TETHER.apk"
