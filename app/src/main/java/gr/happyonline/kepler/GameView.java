@@ -100,7 +100,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF arcRect = new RectF();
-    private Shader skyShader;
     private DashPathEffect bandDash;
     private BlurMaskFilter blurGlow, blurWide;
 
@@ -599,16 +598,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawSky(Canvas c) {
-        // a quiet chart-paper sky: one soft gradient, sparse stars
-        // resting in faint bokeh halos
-        if (skyShader != null) {
-            paint.setShader(skyShader);
-            paint.setStyle(Paint.Style.FILL);
-            c.drawRect(0, 0, width, height, paint);
-            paint.setShader(null);
-        } else {
-            c.drawColor(0xFF0E1018);
-        }
+        // flat navy blue, nothing else - the glow lines carry the scene
+        c.drawColor(0xFF0B1530);
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < 70; i++) {
             float sx = (i * 379f + 53f) % width;
@@ -616,8 +607,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             float tw = 0.6f + 0.4f * (float) Math.sin(menuT * (0.5f + i % 4 * 0.2f) + i);
             int a = (int) (24 + 44 * tw);
             float r = Math.max(1f, width * 0.0011f) * (i % 5 == 0 ? 1.5f : 1f);
-            paint.setColor(Color.argb(a / 4, 226, 232, 245));
-            c.drawCircle(sx, sy, r * 2.6f, paint);
             paint.setColor(Color.argb(a, 226, 232, 245));
             c.drawCircle(sx, sy, r, paint);
         }
@@ -1043,9 +1032,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             width = w;
             height = hpx;
             ballR = w * 0.013f;
-            skyShader = new LinearGradient(0, 0, w * 0.2f, hpx,
-                    new int[]{0xFF131521, 0xFF0E1018, 0xFF0A0B10},
-                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
             bandDash = new DashPathEffect(
                     new float[]{w * 0.0045f, w * 0.014f}, 0f);
             blurGlow = new BlurMaskFilter(w * 0.011f, BlurMaskFilter.Blur.NORMAL);
