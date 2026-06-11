@@ -100,6 +100,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF arcRect = new RectF();
+    private Shader skyShader;
     private DashPathEffect bandDash;
     private BlurMaskFilter blurGlow, blurWide;
 
@@ -598,8 +599,16 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawSky(Canvas c) {
-        // flat navy blue, nothing else - the glow lines carry the scene
-        c.drawColor(0xFF0B1530);
+        // the quiet two-tone sky: a soft dark gradient, sparse stars
+        // resting in faint halos
+        if (skyShader != null) {
+            paint.setShader(skyShader);
+            paint.setStyle(Paint.Style.FILL);
+            c.drawRect(0, 0, width, height, paint);
+            paint.setShader(null);
+        } else {
+            c.drawColor(0xFF0E1018);
+        }
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < 70; i++) {
             float sx = (i * 379f + 53f) % width;
@@ -607,9 +616,22 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             float tw = 0.6f + 0.4f * (float) Math.sin(menuT * (0.5f + i % 4 * 0.2f) + i);
             int a = (int) (24 + 44 * tw);
             float r = Math.max(1f, width * 0.0011f) * (i % 5 == 0 ? 1.5f : 1f);
+            paint.setColor(Color.argb(a / 4, 226, 232, 245));
+            c.drawCircle(sx, sy, r * 2.6f, paint);
             paint.setColor(Color.argb(a, 226, 232, 245));
             c.drawCircle(sx, sy, r, paint);
         }
+    }
+
+    /** Draws centered text, shrinking it if it would overflow maxW. */
+    private void fitText(Canvas c, String s, float x, float y,
+                         float size, float maxW) {
+        textPaint.setTextSize(size);
+        float w = textPaint.measureText(s);
+        if (w > maxW) {
+            textPaint.setTextSize(size * maxW / w);
+        }
+        c.drawText(s, x, y, textPaint);
     }
 
     private float hairline() {
@@ -883,10 +905,11 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
 
         if (!flying && !aiming && launches == 0) {
             float blink = 0.35f + 0.35f * (float) Math.sin(menuT * 2.5f);
-            textPaint.setTextSize(width * 0.036f);
             textPaint.setColor(Color.argb((int) (blink * 255f), 255, 255, 255));
-            c.drawText("sling the comet into the shimmering band", width / 2f, height * 0.93f, textPaint);
-            c.drawText("one full circle... and it falls asleep", width / 2f, height * 0.965f, textPaint);
+            fitText(c, "sling the comet into the shimmering band",
+                    width / 2f, height * 0.93f, width * 0.036f, width * 0.92f);
+            fitText(c, "one full circle... and it falls asleep",
+                    width / 2f, height * 0.965f, width * 0.036f, width * 0.92f);
         }
     }
 
@@ -910,25 +933,25 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         textPaint.setTextSize(width * 0.16f);
         c.drawText("KEPLER", width / 2f, height * 0.21f, textPaint);
 
-        textPaint.setTextSize(width * 0.040f);
         textPaint.setColor(0xFFC8D7FF);
-        c.drawText("lull the comets into orbit", width / 2f, height * 0.26f, textPaint);
+        fitText(c, "lull the comets into orbit",
+                width / 2f, height * 0.26f, width * 0.040f, width * 0.92f);
         textPaint.setColor(0x99FFFFFF);
-        textPaint.setTextSize(width * 0.036f);
-        c.drawText("sling  •  let gravity cradle it  •  one full circle = a moon",
-                width / 2f, height * 0.305f, textPaint);
-        c.drawText("to the sound of Satie, Gymnopédie No. 1", width / 2f, height * 0.34f, textPaint);
+        fitText(c, "sling  •  let gravity cradle it",
+                width / 2f, height * 0.300f, width * 0.036f, width * 0.92f);
+        fitText(c, "one full circle = a moon",
+                width / 2f, height * 0.335f, width * 0.036f, width * 0.92f);
+        fitText(c, "to the sound of Satie, Gymnopédie No. 1",
+                width / 2f, height * 0.375f, width * 0.036f, width * 0.92f);
 
         float blink = 0.55f + 0.45f * (float) Math.sin(menuT * 3f);
-        textPaint.setTextSize(width * 0.065f);
         textPaint.setColor(Color.argb((int) (blink * 255f), 255, 255, 255));
-        c.drawText(level > 1 ? "TAP TO CONTINUE — LVL " + level : "TAP TO BEGIN",
-                width / 2f, height * 0.80f, textPaint);
+        fitText(c, level > 1 ? "TAP TO CONTINUE — LVL " + level : "TAP TO BEGIN",
+                width / 2f, height * 0.80f, width * 0.065f, width * 0.92f);
 
-        textPaint.setTextSize(width * 0.04f);
         textPaint.setColor(0x99FFFFFF);
-        c.drawText("☾ " + moonsTotal + " moons born      reached level " + maxLevel,
-                width / 2f, height * 0.88f, textPaint);
+        fitText(c, "☾ " + moonsTotal + " moons born      reached level " + maxLevel,
+                width / 2f, height * 0.88f, width * 0.04f, width * 0.92f);
     }
 
     private void drawClear(Canvas c) {
@@ -936,21 +959,21 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         paint.setColor(0x99000000);
         c.drawRect(0, 0, width, height, paint);
 
-        textPaint.setTextSize(width * 0.075f);
         textPaint.setColor(0xFFFFE6A0);
-        c.drawText("the system sleeps", width / 2f, height * 0.36f, textPaint);
+        fitText(c, "the system sleeps",
+                width / 2f, height * 0.36f, width * 0.075f, width * 0.92f);
 
-        textPaint.setTextSize(width * 0.043f);
         textPaint.setColor(0xAAFFFFFF);
-        c.drawText("level " + level + "  •  " + launches
-                + (launches == 1 ? " throw" : " throws")
-                + "  •  ☾ " + moonsTotal + " total", width / 2f, height * 0.44f, textPaint);
+        fitText(c, "level " + level + "  •  " + launches
+                        + (launches == 1 ? " throw" : " throws")
+                        + "  •  ☾ " + moonsTotal + " total",
+                width / 2f, height * 0.44f, width * 0.043f, width * 0.92f);
 
         if (clearTimer > 0.6f) {
             float blink = 0.55f + 0.45f * (float) Math.sin(menuT * 4f);
-            textPaint.setTextSize(width * 0.058f);
             textPaint.setColor(Color.argb((int) (blink * 255f), 255, 255, 255));
-            c.drawText("TAP FOR LEVEL " + (level + 1), width / 2f, height * 0.62f, textPaint);
+            fitText(c, "TAP FOR LEVEL " + (level + 1),
+                    width / 2f, height * 0.62f, width * 0.058f, width * 0.92f);
         }
     }
 
@@ -1032,6 +1055,9 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             width = w;
             height = hpx;
             ballR = w * 0.013f;
+            skyShader = new LinearGradient(0, 0, w * 0.2f, hpx,
+                    new int[]{0xFF131521, 0xFF0E1018, 0xFF0A0B10},
+                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
             bandDash = new DashPathEffect(
                     new float[]{w * 0.0045f, w * 0.014f}, 0f);
             blurGlow = new BlurMaskFilter(w * 0.011f, BlurMaskFilter.Blur.NORMAL);
