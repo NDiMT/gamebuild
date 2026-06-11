@@ -39,57 +39,68 @@ def sample(u, v):
     base = 0.10 + 0.07 * max(0.0, 1.0 - d * 1.2)
     cr, cg, cb = base * 0.55, base * 0.75, base * 1.6
 
-    # ORBIT: a planet bending a dotted comet trajectory into a goal ring
-    # planet
-    pcx, pcy, pr = -0.05, 0.05, 0.30
-    pd = math.hypot(u - pcx, v - pcy)
+    # KEPLER: a pastel planet, its shimmering capture band,
+    # a golden moon mid-orbit and a dotted comet approach
+    pxp, pyp, pr = -0.04, 0.04, 0.26
+    pd = math.hypot(u - pxp, v - pyp)
+
+    # nebula tints
+    for nx, ny, nr, (tr, tg, tb) in ((-0.5, -0.5, 0.9, (0.30, 0.22, 0.55)),
+                                     (0.6, 0.55, 0.8, (0.10, 0.40, 0.45))):
+        nd = math.hypot(u - nx, v - ny)
+        k = math.exp(-((nd / nr) ** 2)) * 0.35
+        cr += tr * k
+        cg += tg * k
+        cb += tb * k
+
+    # capture band annulus
+    band_mid, band_w = pr * 1.95, pr * 0.55
+    bd = abs(pd - band_mid)
+    if bd < band_w / 2:
+        cr += 0.10
+        cg += 0.12
+        cb += 0.18
+    if abs(pd - (band_mid - band_w / 2)) < 0.012 or abs(pd - (band_mid + band_w / 2)) < 0.012:
+        cr += 0.18
+        cg += 0.22
+        cb += 0.30
+
+    # planet body (pastel indigo)
     if pd < pr:
-        cr, cg, cb = 0.23, 0.29, 0.48
-        if math.hypot(u - pcx - pr * 0.25, v - pcy - pr * 0.25) < pr * 0.8:
-            cr, cg, cb = 0.17, 0.22, 0.38
-    elif pd < pr * 1.12:
-        cr, cg, cb = 0.35, 0.55, 0.95
+        cr, cg, cb = 0.26, 0.32, 0.55
+        if math.hypot(u - pxp - 0.06, v - pyp - 0.05) > pr * 0.85:
+            cr, cg, cb = 0.19, 0.24, 0.44
+    elif pd < pr * 1.10:
+        cr, cg, cb = 0.45, 0.55, 0.85
 
-    # gravity rings
-    for gk in (1.7, 2.3):
-        if abs(pd - pr * gk) < 0.015:
-            cr += 0.10
-            cg += 0.25
-            cb += 0.35
+    # golden progress arc along the band (about 270 degrees)
+    ang = math.atan2(v - pyp, u - pxp)
+    if bd < 0.02 and not (-0.6 < ang < 0.2):
+        cr, cg, cb = 1.0, 0.88, 0.55
+    # golden moon at the arc's head
+    ma = 0.2
+    mx0 = pxp + math.cos(ma) * band_mid
+    my0 = pyp + math.sin(ma) * band_mid
+    md = math.hypot(u - mx0, v - my0)
+    mglow = math.exp(-((md / 0.15) ** 2)) * 0.8
+    cr += mglow
+    cg += mglow * 0.88
+    cb += mglow * 0.55
+    if md < 0.07:
+        cr, cg, cb = 1.0, 0.92, 0.66
 
-    # dotted trajectory: swings from bottom-left around the planet to top-right
-    for i in range(16):
-        t = i / 15.0
-        ang = math.radians(210 - 240 * t)
-        rad = pr * (2.6 - 0.75 * math.sin(math.pi * t))
-        txp = pcx + math.cos(ang) * rad
-        typ = pcy - math.sin(ang) * rad
-        if math.hypot(u - txp, v - typ) < 0.030:
-            cr, cg, cb = 0.91, 0.98, 1.0
-
-    # comet at trajectory start
-    cd = math.hypot(u + 0.62, v - 0.55)
-    cglow = math.exp(-((cd / 0.14) ** 2)) * 0.8
-    cg += cglow * 0.85
-    cb += cglow
-    cr += cglow * 0.3
-    if cd < 0.06:
-        cr, cg, cb = 0.91, 0.98, 1.0
-
-    # goal ring top-right
-    gd = math.hypot(u - 0.55, v + 0.55)
-    if 0.10 < gd < 0.16:
-        cr, cg, cb = 0.41, 0.94, 0.68
-    else:
-        gglow = math.exp(-((abs(gd - 0.13) / 0.10) ** 2)) * 0.4
-        cg += gglow * 0.9
-        cb += gglow * 0.5
-        cr += gglow * 0.2
-
-    # small golden star pickup
-    sd = abs(u - 0.42) + abs(v - 0.18)
-    if sd < 0.07:
-        cr, cg, cb = 1.0, 0.84, 0.25
+    # dotted comet approach from bottom-left
+    for i in range(7):
+        t = i / 6.0
+        tx = -0.85 + t * 0.55
+        ty = 0.85 - t * 0.45
+        if math.hypot(u - tx, v - ty) < 0.022:
+            cr, cg, cb = 0.93, 0.97, 1.0
+    sd0 = math.hypot(u + 0.85, v - 0.85)
+    sg = math.exp(-((sd0 / 0.12) ** 2)) * 0.7
+    cr += sg * 0.9
+    cg += sg * 0.95
+    cb += sg
 
     aa = min(1.0, -plate / 0.02)  # soft edge on the plate
     return (min(cr, 1.0), min(cg, 1.0), min(cb, 1.0), aa)

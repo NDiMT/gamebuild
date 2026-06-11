@@ -1,4 +1,4 @@
-package gr.happyonline.orbit;
+package gr.happyonline.kepler;
 
 import android.app.Activity;
 import android.os.Bundle;

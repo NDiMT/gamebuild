@@ -1,33 +1,34 @@
-# ORBIT
+# KEPLER
 
-Gravity golf για Android: εκτοξεύεις έναν κομήτη με σφεντόνα μέσα σε ένα
-μικρό σύμπαν, οι πλανήτες λυγίζουν την τροχιά του με πραγματική βαρύτητα,
-και πρέπει να τον προσγειώσεις στον στόχο. **Άπειρα procedurally
-generated levels** — η πρόοδός σου σώζεται.
+Το πιο μαγικό παιχνίδι του repo: **slingshot σώματα και προσπάθησε να τα
+βάλεις σε τροχιά** γύρω από πλανήτες — με υπόκρουση το **Πρελούδιο σε Ντο
+μείζονα του Bach (BWV 846)**, συντεθειμένο νότα-νότα σε PCM με ήχο άρπας
+κατά την εκκίνηση (κανένα αρχείο ήχου στο APK, seamless loop).
 
 ## Gameplay
 
-- **Σύρε οπουδήποτε και άφησε** = σφεντόνα (με preview τροχιάς που
-  δείχνει πώς θα καμπυλώσει η βολή μέσα στα βαρυτικά πεδία).
-- Οι πλανήτες **έλκουν** τον κομήτη — χρησιμοποίησε slingshots γύρω τους.
-  Πρόσκρουση = χάνεις τη βολή, ξαναπροσπαθείς.
-- Μάζεψε τα **3 αστέρια ★** κάθε επιπέδου στη διαδρομή — μένουν δικά σου
-  και μεταξύ προσπαθειών.
-- Κλιμάκωση: περισσότεροι/βαρύτεροι πλανήτες, **repulsors** (κόκκινοι,
-  απωθούν, level 6+), **κινούμενα φεγγάρια** (level 12+), μικρότερος
-  στόχος όσο ανεβαίνεις.
-- Μετράς **shots** ανά level (golf score). Κόλλησες; Μετά από 12 βολές
-  εμφανίζεται SKIP.
-- Αποθηκεύονται: τρέχον level, σύνολο αστεριών, μέγιστο level.
+- **Σύρε & άφησε** = σφεντόνα (με dotted preview τροχιάς).
+- Κάθε πλανήτης έχει μια **λαμπερή ζώνη σύλληψης** (annulus). Κράτησε τον
+  κομήτη μέσα της για **μία πλήρη περιφορά** (βλέπεις χρυσό τόξο προόδου
+  και ποσοστό) — και «αποκοιμιέται»: γίνεται **φεγγάρι** που μένει σε
+  τροχιά για πάντα.
+- Κάθε level ζητά συγκεκριμένα φεγγάρια ανά πλανήτη (pips στο κέντρο του).
+- Κλιμάκωση: 2ος πλανήτης (lvl 3), στενότερες ζώνες, **repulsors** (lvl 7+),
+  3ος πλανήτης (lvl 8), περισσότερα φεγγάρια ανά πλανήτη, **κινούμενοι
+  πλανήτες** (lvl 12+).
+- Πρόσκρουση/χάσιμο στο κενό = απλώς νέος κομήτης, χωρίς τιμωρία.
+  Άπειρα procedural levels, η πρόοδος σώζεται (level, σύνολο φεγγαριών).
+- Αισθητική: νεφελώματα που παρασύρονται, αστέρια που τρεμοπαίζουν,
+  fairy dust στις ζώνες, harp glissando σε κάθε σύλληψη.
 
-Όλα τα γραφικά είναι procedural (Canvas/SurfaceView) και όλοι οι ήχοι
-συντίθενται σε PCM κατά την εκκίνηση — κανένα asset, ~75 KB APK.
+Όλα procedural (Canvas/SurfaceView) — γραφικά, ήχοι ΚΑΙ μουσική. ~90 KB APK.
 
 ## Έτοιμα APKs
 
 | Παιχνίδι | Αρχείο | Περιγραφή |
 |---|---|---|
-| **ORBIT** | [`dist/ORBIT.apk`](dist/ORBIT.apk) | Gravity golf με άπειρα levels (τρέχων κώδικας στο `app/`) |
+| **KEPLER** | [`dist/KEPLER.apk`](dist/KEPLER.apk) | Orbital capture με μουσική Bach (τρέχων κώδικας στο `app/`) |
+| **ORBIT** | [`dist/ORBIT.apk`](dist/ORBIT.apk) | Gravity golf με άπειρα levels |
 | **TETHER** | [`dist/TETHER.apk`](dist/TETHER.apk) | Σκοινί-λεπίδα με physics flail |
 | **BEACON** | [`dist/BEACON.apk`](dist/BEACON.apk) | Οι σκιές κινούνται μόνο στο σκοτάδι + survivor upgrades |
 | **ECHO** | [`dist/ECHO.apk`](dist/ECHO.apk) | Αποφεύγεις looping replays του εαυτού σου |
@@ -57,16 +58,16 @@ Maven Central + GitHub mirrors):
 
 ```bash
 ./scripts/fetch-tools.sh    # κατεβάζει android.jar, aapt2, dx, signer
-./scripts/build-offline.sh  # παράγει dist/ORBIT.apk
+./scripts/build-offline.sh  # παράγει dist/KEPLER.apk
 ```
 
 ## Δομή
 
 ```
-app/src/main/java/gr/happyonline/orbit/
+app/src/main/java/gr/happyonline/kepler/
   MainActivity.java   # fullscreen activity + lifecycle
-  GameView.java       # level generation, gravity physics, aiming, rendering
-  SoundFx.java        # procedural PCM sound synthesis
+  GameView.java       # orbital capture, gravity, level generation, rendering
+  SoundFx.java        # SFX + Bach BWV 846 synthesized into a looping track
 tools/icon_gen.py     # δημιουργεί τα launcher icons (pure Python)
 scripts/              # offline build pipeline
 ```
