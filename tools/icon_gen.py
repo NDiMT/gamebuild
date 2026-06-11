@@ -39,64 +39,57 @@ def sample(u, v):
     base = 0.10 + 0.07 * max(0.0, 1.0 - d * 1.2)
     cr, cg, cb = base * 0.55, base * 0.75, base * 1.6
 
-    # TETHER: two orbs joined by a glowing cord that slices a shadow
-    ax, ay = -0.42, 0.38   # white player orb
-    bx2, by2 = 0.45, -0.42 # cyan partner orb
+    # ORBIT: a planet bending a dotted comet trajectory into a goal ring
+    # planet
+    pcx, pcy, pr = -0.05, 0.05, 0.30
+    pd = math.hypot(u - pcx, v - pcy)
+    if pd < pr:
+        cr, cg, cb = 0.23, 0.29, 0.48
+        if math.hypot(u - pcx - pr * 0.25, v - pcy - pr * 0.25) < pr * 0.8:
+            cr, cg, cb = 0.17, 0.22, 0.38
+    elif pd < pr * 1.12:
+        cr, cg, cb = 0.35, 0.55, 0.95
 
-    # cord: quadratic bezier with slight sag
-    mx, my = (ax + bx2) / 2 + 0.10, (ay + by2) / 2 + 0.10
-    best_d = 9.9
-    for i in range(33):
-        t = i / 32.0
-        qx_ = (1 - t) ** 2 * ax + 2 * (1 - t) * t * mx + t * t * bx2
-        qy_ = (1 - t) ** 2 * ay + 2 * (1 - t) * t * my + t * t * by2
-        d = math.hypot(u - qx_, v - qy_)
-        if d < best_d:
-            best_d = d
-    cglow = math.exp(-((best_d / 0.10) ** 2)) * 0.7
-    cg += 0.85 * cglow
-    cb += 1.0 * cglow
-    cr += 0.3 * cglow
-    if best_d < 0.025:
+    # gravity rings
+    for gk in (1.7, 2.3):
+        if abs(pd - pr * gk) < 0.015:
+            cr += 0.10
+            cg += 0.25
+            cb += 0.35
+
+    # dotted trajectory: swings from bottom-left around the planet to top-right
+    for i in range(16):
+        t = i / 15.0
+        ang = math.radians(210 - 240 * t)
+        rad = pr * (2.6 - 0.75 * math.sin(math.pi * t))
+        txp = pcx + math.cos(ang) * rad
+        typ = pcy - math.sin(ang) * rad
+        if math.hypot(u - txp, v - typ) < 0.030:
+            cr, cg, cb = 0.91, 0.98, 1.0
+
+    # comet at trajectory start
+    cd = math.hypot(u + 0.62, v - 0.55)
+    cglow = math.exp(-((cd / 0.14) ** 2)) * 0.8
+    cg += cglow * 0.85
+    cb += cglow
+    cr += cglow * 0.3
+    if cd < 0.06:
         cr, cg, cb = 0.91, 0.98, 1.0
 
-    # shadow being cut (split halves either side of the cord)
-    for off in (-0.10, 0.10):
-        sxp, syp = 0.10 + off * 0.7, 0.02 - off * 0.7
-        sd = math.hypot(u - sxp, v - syp)
-        if sd < 0.115 and best_d > 0.035:
-            cr, cg, cb = 0.10, 0.11, 0.20
-            la = math.atan2(ay - syp, ax - sxp)
-            for side in (-1, 1):
-                exp_ = sxp + math.cos(la) * 0.04 + math.cos(la + math.pi / 2) * 0.045 * side
-                eyp = syp + math.sin(la) * 0.04 + math.sin(la + math.pi / 2) * 0.045 * side
-                if math.hypot(u - exp_, v - eyp) < 0.018:
-                    cr, cg, cb = 0.56, 0.66, 1.0
+    # goal ring top-right
+    gd = math.hypot(u - 0.55, v + 0.55)
+    if 0.10 < gd < 0.16:
+        cr, cg, cb = 0.41, 0.94, 0.68
+    else:
+        gglow = math.exp(-((abs(gd - 0.13) / 0.10) ** 2)) * 0.4
+        cg += gglow * 0.9
+        cb += gglow * 0.5
+        cr += gglow * 0.2
 
-    # player orb (white)
-    pd = math.hypot(u - ax, v - ay)
-    pglow = math.exp(-((pd / 0.16) ** 2)) * 0.85
-    cr += pglow
-    cg += pglow
-    cb += pglow
-    if pd < 0.085:
-        cr, cg, cb = 1.0, 1.0, 1.0
-
-    # partner orb (cyan, with motion trail)
-    qd = math.hypot(u - bx2, v - by2)
-    qglow = math.exp(-((qd / 0.18) ** 2)) * 0.8
-    cg += 0.85 * qglow
-    cb += 1.0 * qglow
-    cr += 0.25 * qglow
-    if qd < 0.095:
-        cr, cg, cb = 0.25, 0.90, 1.0
-    for i in range(1, 4):
-        td = math.hypot(u - (bx2 + 0.10 * i), v - (by2 + 0.13 * i))
-        if td < 0.09 * (1.0 - i * 0.22):
-            fade = 0.55 / i
-            cg += fade * 0.85
-            cb += fade
-            cr += fade * 0.2
+    # small golden star pickup
+    sd = abs(u - 0.42) + abs(v - 0.18)
+    if sd < 0.07:
+        cr, cg, cb = 1.0, 0.84, 0.25
 
     aa = min(1.0, -plate / 0.02)  # soft edge on the plate
     return (min(cr, 1.0), min(cg, 1.0), min(cb, 1.0), aa)

@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'gr.happyonline.tether'
+    namespace 'gr.happyonline.orbit'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'gr.happyonline.tether'
+        applicationId 'gr.happyonline.orbit'
         minSdk 21
         targetSdk 34
         versionCode 1

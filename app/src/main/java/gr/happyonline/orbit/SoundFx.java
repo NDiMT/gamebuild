@@ -1,4 +1,4 @@
-package gr.happyonline.tether;
+package gr.happyonline.orbit;
 
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -12,33 +12,27 @@ import java.util.Random;
  */
 public class SoundFx {
 
-    public static final int START = 0;
-    public static final int OVER = 1;
-    public static final int HIT = 2;
-    public static final int WAVE = 3;
-    public static final int NEW_BEST = 4;
-    public static final int GEM = 5;
-    public static final int CLANG = 6;
-    public static final int KILL_0 = 7; // ..KILL_0 + 7, rising with the combo
+    public static final int LAUNCH = 0;
+    public static final int CRASH = 1;
+    public static final int FIZZLE = 2;
+    public static final int CLEAR = 3;
+    public static final int STAR_0 = 4; // ..STAR_0 + 2, rising chimes
 
     private static final int RATE = 44100;
 
-    private final AudioTrack[] tracks = new AudioTrack[15];
+    private final AudioTrack[] tracks = new AudioTrack[7];
 
     public SoundFx() {
         try {
-            tracks[START] = make(sweep(330f, 880f, 0.18f, 0.35f));
-            tracks[OVER] = make(noise(0.5f, 0.5f));
-            tracks[HIT] = make(thud());
-            tracks[WAVE] = make(sweep(440f, 1760f, 0.22f, 0.4f));
-            tracks[NEW_BEST] = make(concat(sine(660f, 0.09f, 0.45f),
-                    sine(831f, 0.09f, 0.45f), sine(988f, 0.16f, 0.45f)));
-            tracks[GEM] = make(sine(1175f, 0.09f, 0.4f));
-            tracks[CLANG] = make(clang());
-            // pentatonic-ish ladder so kill streaks literally sound like climbing
-            float[] steps = {523f, 587f, 659f, 784f, 880f, 1047f, 1175f, 1319f};
-            for (int i = 0; i < 8; i++) {
-                tracks[KILL_0 + i] = make(slice(steps[i]));
+            tracks[LAUNCH] = make(sweep(220f, 660f, 0.14f, 0.35f));
+            tracks[CRASH] = make(noise(0.35f, 0.5f));
+            tracks[FIZZLE] = make(sweep(660f, 180f, 0.25f, 0.3f));
+            tracks[CLEAR] = make(concat(sine(523f, 0.09f, 0.45f),
+                    sine(659f, 0.09f, 0.45f), sine(784f, 0.09f, 0.45f),
+                    sine(1047f, 0.20f, 0.45f)));
+            float[] steps = {784f, 988f, 1319f};
+            for (int i = 0; i < 3; i++) {
+                tracks[STAR_0 + i] = make(sine(steps[i], 0.11f, 0.4f));
             }
         } catch (Exception ignored) {
             // no audio is better than no game
@@ -86,50 +80,6 @@ public class SoundFx {
         for (int i = 0; i < n; i++) {
             double env = Math.exp(-4.0 * i / n) * Math.min(1.0, i / (RATE * 0.004));
             out[i] = (short) (Math.sin(2 * Math.PI * freq * i / RATE) * env * vol * 32767);
-        }
-        return out;
-    }
-
-    /** A kill: bright tone with a whoosh of noise - the sound of a clean cut. */
-    private static short[] slice(float freq) {
-        int n = (int) (RATE * 0.11f);
-        short[] out = new short[n];
-        Random r = new Random(3);
-        double lp = 0;
-        for (int i = 0; i < n; i++) {
-            double k = (double) i / n;
-            double env = Math.exp(-5.0 * k);
-            lp += ((r.nextDouble() * 2 - 1) - lp) * 0.5;
-            double s = Math.sin(2 * Math.PI * freq * i / RATE) * 0.7 + lp * 0.5;
-            out[i] = (short) (s * env * 0.4 * 32767);
-        }
-        return out;
-    }
-
-    /** Metallic tick for an armored shadow shrugging off a cut. */
-    private static short[] clang() {
-        int n = (int) (RATE * 0.08f);
-        short[] out = new short[n];
-        for (int i = 0; i < n; i++) {
-            double k = (double) i / n;
-            double env = Math.exp(-8.0 * k);
-            double s = Math.sin(2 * Math.PI * 1850 * i / (double) RATE) * 0.6
-                    + Math.sin(2 * Math.PI * 2483 * i / (double) RATE) * 0.4;
-            out[i] = (short) (s * env * 0.3 * 32767);
-        }
-        return out;
-    }
-
-    private static short[] thud() {
-        int n = (int) (RATE * 0.22f);
-        short[] out = new short[n];
-        double phase = 0;
-        for (int i = 0; i < n; i++) {
-            double k = (double) i / n;
-            double f = 160 - 90 * k;
-            phase += 2 * Math.PI * f / RATE;
-            double env = Math.exp(-5.0 * k);
-            out[i] = (short) (Math.sin(phase) * env * 0.55 * 32767);
         }
         return out;
     }
