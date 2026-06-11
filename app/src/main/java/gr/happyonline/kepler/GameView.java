@@ -27,7 +27,7 @@ import java.util.Random;
  * Sling a comet into the pull of a planet and keep it inside the soft
  * shimmering band until it completes one full revolution: then it falls
  * asleep and becomes a moon, circling forever. Each level asks for a few
- * moons around each planet. Chopin's E minor Prelude plays underneath - this
+ * moons around each planet. Satie's first Gymnopédie plays underneath - this
  * is a lullaby, not a battle.
  */
 public class GameView extends SurfaceView implements SurfaceHolder.Callback {
@@ -100,7 +100,9 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF arcRect = new RectF();
     private Shader skyShader;
+    private Shader washA, washB, washC;
     private DashPathEffect bandDash;
+    private BlurMaskFilter blurGlow, blurWide;
 
     private static class Planet {
         float baseX, y, r, x;
@@ -595,7 +597,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawSky(Canvas c) {
-        // a quiet chart-paper sky: one soft gradient, sparse pin-prick stars
+        // deep gradient under wide out-of-focus color washes
         if (skyShader != null) {
             paint.setShader(skyShader);
             paint.setStyle(Paint.Style.FILL);
@@ -604,19 +606,90 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         } else {
             c.drawColor(0xFF0E1018);
         }
+        drawWash(c, washA, width * (0.28f + 0.05f * (float) Math.sin(menuT * 0.07f)),
+                height * (0.22f + 0.03f * (float) Math.cos(menuT * 0.09f)),
+                0.6f + 0.4f * (float) Math.sin(menuT * 0.16f));
+        drawWash(c, washB, width * (0.78f + 0.04f * (float) Math.cos(menuT * 0.06f)),
+                height * (0.58f + 0.04f * (float) Math.sin(menuT * 0.08f)),
+                0.6f + 0.4f * (float) Math.sin(menuT * 0.13f + 2f));
+        drawWash(c, washC, width * (0.22f + 0.04f * (float) Math.sin(menuT * 0.05f + 4f)),
+                height * (0.86f + 0.03f * (float) Math.cos(menuT * 0.07f)),
+                0.6f + 0.4f * (float) Math.sin(menuT * 0.11f + 5f));
+
+        // sparse stars, each wrapped in a faint bokeh halo
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < 70; i++) {
             float sx = (i * 379f + 53f) % width;
             float sy = (i * 233f + 89f) % height;
             float tw = 0.6f + 0.4f * (float) Math.sin(menuT * (0.5f + i % 4 * 0.2f) + i);
-            paint.setColor(Color.argb((int) (24 + 42 * tw), 226, 232, 245));
-            c.drawCircle(sx, sy,
-                    Math.max(1f, width * 0.0011f) * (i % 5 == 0 ? 1.5f : 1f), paint);
+            int a = (int) (24 + 44 * tw);
+            float r = Math.max(1f, width * 0.0011f) * (i % 5 == 0 ? 1.5f : 1f);
+            paint.setColor(Color.argb(a / 3, 226, 232, 245));
+            c.drawCircle(sx, sy, r * 3.4f, paint);
+            paint.setColor(Color.argb(a, 226, 232, 245));
+            c.drawCircle(sx, sy, r, paint);
         }
+    }
+
+    private void drawWash(Canvas c, Shader s, float x, float y, float breath) {
+        if (s == null) return;
+        c.save();
+        c.translate(x, y);
+        paint.setShader(s);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setAlpha((int) (150 + 105 * breath));
+        c.drawCircle(0, 0, width * 0.95f, paint);
+        paint.setShader(null);
+        paint.setAlpha(255);
+        c.restore();
     }
 
     private float hairline() {
         return Math.max(1.5f, width * 0.0022f);
+    }
+
+    /** A fine line that bleeds light: blurred underlay, crisp stroke on top. */
+    private void glowCircle(Canvas c, float x, float y, float r, int color,
+                            float strokeW, DashPathEffect dash) {
+        glowPaint.setStyle(Paint.Style.STROKE);
+        glowPaint.setMaskFilter(blurGlow);
+        glowPaint.setPathEffect(dash);
+        glowPaint.setStrokeWidth(strokeW * 3.4f);
+        glowPaint.setColor((color & 0x00FFFFFF) | ((Color.alpha(color) * 3 / 5) << 24));
+        c.drawCircle(x, y, r, glowPaint);
+        glowPaint.setMaskFilter(null);
+        glowPaint.setPathEffect(null);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setPathEffect(dash);
+        paint.setStrokeWidth(strokeW);
+        paint.setColor(color);
+        c.drawCircle(x, y, r, paint);
+        paint.setPathEffect(null);
+    }
+
+    private void glowArc(Canvas c, RectF rect, float start, float sweep,
+                         int color, float strokeW) {
+        glowPaint.setStyle(Paint.Style.STROKE);
+        glowPaint.setMaskFilter(blurGlow);
+        glowPaint.setStrokeWidth(strokeW * 3.4f);
+        glowPaint.setColor((color & 0x00FFFFFF) | ((Color.alpha(color) * 3 / 5) << 24));
+        c.drawArc(rect, start, sweep, false, glowPaint);
+        glowPaint.setMaskFilter(null);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(strokeW);
+        paint.setColor(color);
+        c.drawArc(rect, start, sweep, false, paint);
+    }
+
+    private void glowDot(Canvas c, float x, float y, float r, int color) {
+        glowPaint.setStyle(Paint.Style.FILL);
+        glowPaint.setMaskFilter(blurWide);
+        glowPaint.setColor((color & 0x00FFFFFF) | 0x66000000);
+        c.drawCircle(x, y, r * 2.6f, glowPaint);
+        glowPaint.setMaskFilter(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(color);
+        c.drawCircle(x, y, r, paint);
     }
 
     private void drawPlanets(Canvas c) {
@@ -626,56 +699,53 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             int line = p.repulse ? 0xFFD8788C : Color.HSVToColor(hsv);
 
             if (!p.repulse) {
-                // capture band: two delicate dashed rings, slowly turning
+                // capture band: two delicate dashed rings, slowly turning,
+                // bleeding neon light
                 boolean active = flying && capP == i;
-                int a = active ? 150 : 64 + (int) (p.bloom * 100);
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(hairline());
-                paint.setPathEffect(bandDash);
-                paint.setColor((line & 0x00FFFFFF) | (a << 24));
+                int a = active ? 190 : 84 + (int) (p.bloom * 100);
+                int bandCol = (line & 0x00FFFFFF) | (a << 24);
                 c.save();
                 c.rotate(menuT * 2.4f, p.x, p.y);
-                c.drawCircle(p.x, p.y, p.bandIn, paint);
+                glowCircle(c, p.x, p.y, p.bandIn, bandCol, hairline(), bandDash);
                 c.restore();
                 c.save();
                 c.rotate(-menuT * 1.6f, p.x, p.y);
-                c.drawCircle(p.x, p.y, p.bandOut, paint);
+                glowCircle(c, p.x, p.y, p.bandOut, bandCol, hairline(), bandDash);
                 c.restore();
-                paint.setPathEffect(null);
             }
 
-            // body: a quiet disc with a single fine ring
+            // body: a quiet disc with a single fine luminous ring
             paint.setStyle(Paint.Style.FILL);
             float[] fillHsv = {p.hue, 0.35f, 0.16f};
             paint.setColor(p.repulse ? 0xFF1E1218 : Color.HSVToColor(fillHsv));
             c.drawCircle(p.x, p.y, p.r, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(hairline() * (1f + p.bloom));
-            paint.setColor(line);
-            c.drawCircle(p.x, p.y, p.r, paint);
+            glowCircle(c, p.x, p.y, p.r, line, hairline() * (1f + p.bloom), null);
             if (p.bloom > 0f) {
-                paint.setColor((line & 0x00FFFFFF) | (((int) (p.bloom * 120f)) << 24));
-                c.drawCircle(p.x, p.y, p.r * (1f + p.bloom * 0.5f), paint);
+                glowCircle(c, p.x, p.y, p.r * (1f + p.bloom * 0.5f),
+                        (line & 0x00FFFFFF) | (((int) (p.bloom * 120f)) << 24),
+                        hairline(), null);
             }
             if (p.repulse) {
+                paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(hairline());
+                paint.setColor(line);
                 c.drawLine(p.x - p.r * 0.4f, p.y, p.x + p.r * 0.4f, p.y, paint);
             }
 
-            // moon requirement pips: filled when earned, outlined when owed
+            // moon requirement pips: glowing when earned, outlined when owed
             if (p.needed > 0) {
                 float px0 = p.x - (p.needed - 1) * width * 0.014f;
                 for (int k = 0; k < p.needed; k++) {
                     boolean got = k < p.captured;
                     if (got) {
-                        paint.setStyle(Paint.Style.FILL);
-                        paint.setColor(0xFFEFCB8A);
+                        glowDot(c, px0 + k * width * 0.028f, p.y,
+                                width * 0.006f, 0xFFEFCB8A);
                     } else {
                         paint.setStyle(Paint.Style.STROKE);
                         paint.setStrokeWidth(hairline() * 0.8f);
                         paint.setColor(0x99E9EDF7);
+                        c.drawCircle(px0 + k * width * 0.028f, p.y, width * 0.006f, paint);
                     }
-                    c.drawCircle(px0 + k * width * 0.028f, p.y, width * 0.006f, paint);
                 }
             }
         }
@@ -690,22 +760,17 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             float mx = p.x + (float) Math.cos(m.angle) * m.radius;
             float my = p.y + (float) Math.sin(m.angle) * m.radius;
 
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(hairline() * 0.8f);
-            paint.setColor(moonColor(m, 0.22f));
-            c.drawCircle(p.x, p.y, m.radius, paint);
+            glowCircle(c, p.x, p.y, m.radius, moonColor(m, 0.30f),
+                    hairline() * 0.8f, null);
 
             // a short trailing arc, like a slow exposure
             arcRect.set(p.x - m.radius, p.y - m.radius, p.x + m.radius, p.y + m.radius);
             float headDeg = m.angle * 360f / TAU;
             float tailDeg = 26f * Math.signum(m.omega);
-            paint.setStrokeWidth(hairline());
-            paint.setColor(moonColor(m, 0.55f));
-            c.drawArc(arcRect, headDeg - tailDeg, tailDeg, false, paint);
+            glowArc(c, arcRect, headDeg - tailDeg, tailDeg,
+                    moonColor(m, 0.65f), hairline());
 
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(moonColor(m, 1f));
-            c.drawCircle(mx, my, ballR * 0.95f, paint);
+            glowDot(c, mx, my, ballR * 0.95f, moonColor(m, 1f));
         }
     }
 
@@ -715,10 +780,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         arcRect.set(p.x - r, p.y - r, p.x + r, p.y + r);
         float sweepDeg = capSweep * 360f / TAU;
         float startDeg = (capLastTheta * 360f / TAU) - sweepDeg;
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(hairline() * 1.4f);
-        paint.setColor(0xF2EFCB8A);
-        c.drawArc(arcRect, startDeg, sweepDeg, false, paint);
+        glowArc(c, arcRect, startDeg, sweepDeg, 0xF2EFCB8A, hairline() * 1.4f);
 
         // progress whisper near the planet
         float k = Math.min(1f, Math.abs(capSweep) / TAU);
@@ -728,12 +790,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawPad(Canvas c) {
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(width * 0.003f);
-        paint.setColor(0x44E8FBFF);
-        c.drawCircle(startX, startY, width * 0.05f, paint);
-        paint.setColor(0x22E8FBFF);
-        c.drawCircle(startX, startY, width * 0.08f, paint);
+        glowCircle(c, startX, startY, width * 0.05f, 0x55E8FBFF, hairline() * 0.9f, null);
+        glowCircle(c, startX, startY, width * 0.08f, 0x2AE8FBFF, hairline() * 0.8f, bandDash);
     }
 
     private void drawPreview(Canvas c) {
@@ -790,25 +848,29 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawComet(Canvas c) {
-        // a pencil-line of light behind a single white point
+        // a line of light behind a single white point
         if (flying) {
+            glowPaint.setStyle(Paint.Style.STROKE);
+            glowPaint.setStrokeCap(Paint.Cap.ROUND);
+            glowPaint.setMaskFilter(blurGlow);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeCap(Paint.Cap.ROUND);
             for (int s = 0; s < trailX.length - 1; s++) {
                 int i0 = (trailHead - s + trailX.length * 2) % trailX.length;
                 int i1 = (trailHead - s - 1 + trailX.length * 2) % trailX.length;
                 float k = 1f - s / (float) trailX.length;
+                glowPaint.setStrokeWidth(hairline() * (1.6f + 2.6f * k));
+                glowPaint.setColor(Color.argb((int) (70f * k), 150, 200, 255));
+                c.drawLine(trailX[i0], trailY[i0], trailX[i1], trailY[i1], glowPaint);
                 paint.setStrokeWidth(hairline() * (0.5f + 0.9f * k));
-                paint.setColor(Color.argb((int) (120f * k), 233, 237, 247));
+                paint.setColor(Color.argb((int) (140f * k), 233, 237, 247));
                 c.drawLine(trailX[i0], trailY[i0], trailX[i1], trailY[i1], paint);
             }
+            glowPaint.setMaskFilter(null);
+            glowPaint.setStrokeCap(Paint.Cap.BUTT);
             paint.setStrokeCap(Paint.Cap.BUTT);
         }
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0x2EE9EDF7);
-        c.drawCircle(bx, by, ballR * 2.2f, paint);
-        paint.setColor(0xFFF7F9FF);
-        c.drawCircle(bx, by, ballR * 0.95f, paint);
+        glowDot(c, bx, by, ballR * 0.95f, 0xFFF7F9FF);
     }
 
     private void drawParticles(Canvas c) {
@@ -866,23 +928,15 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(0xFF151A2B);
         c.drawCircle(pcx, pcy, pr, paint);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(hairline());
-        paint.setColor(0xFF8FA8E0);
-        c.drawCircle(pcx, pcy, pr, paint);
-        paint.setPathEffect(bandDash);
-        paint.setColor(0x668FA8E0);
+        glowCircle(c, pcx, pcy, pr, 0xFF8FA8E0, hairline(), null);
         c.save();
         c.rotate(menuT * 2f, pcx, pcy);
-        c.drawCircle(pcx, pcy, pr * 2.1f, paint);
+        glowCircle(c, pcx, pcy, pr * 2.1f, 0x888FA8E0, hairline(), bandDash);
         c.restore();
-        paint.setPathEffect(null);
         float ma = menuT * 0.9f;
         float mx = pcx + (float) Math.cos(ma) * pr * 2.1f;
         float my = pcy + (float) Math.sin(ma) * pr * 2.1f;
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFFEFCB8A);
-        c.drawCircle(mx, my, ballR * 0.95f, paint);
+        glowDot(c, mx, my, ballR * 0.95f, 0xFFEFCB8A);
 
         textPaint.setColor(Color.WHITE);
         textPaint.setTextSize(width * 0.16f);
@@ -895,7 +949,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         textPaint.setTextSize(width * 0.036f);
         c.drawText("sling  •  let gravity cradle it  •  one full circle = a moon",
                 width / 2f, height * 0.305f, textPaint);
-        c.drawText("to the sound of Chopin, Op. 28 No. 4", width / 2f, height * 0.34f, textPaint);
+        c.drawText("to the sound of Satie, Gymnopédie No. 1", width / 2f, height * 0.34f, textPaint);
 
         float blink = 0.55f + 0.45f * (float) Math.sin(menuT * 3f);
         textPaint.setTextSize(width * 0.065f);
@@ -1013,8 +1067,19 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             skyShader = new LinearGradient(0, 0, w * 0.2f, hpx,
                     new int[]{0xFF131521, 0xFF0E1018, 0xFF0A0B10},
                     new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
+            washA = new RadialGradient(0, 0, w * 0.95f,
+                    new int[]{0x30485ACC, 0x16283070, 0x00000000},
+                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
+            washB = new RadialGradient(0, 0, w * 0.85f,
+                    new int[]{0x282E9AA0, 0x12205058, 0x00000000},
+                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
+            washC = new RadialGradient(0, 0, w * 0.80f,
+                    new int[]{0x26A05A90, 0x12502848, 0x00000000},
+                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
             bandDash = new DashPathEffect(
                     new float[]{w * 0.0045f, w * 0.014f}, 0f);
+            blurGlow = new BlurMaskFilter(w * 0.011f, BlurMaskFilter.Blur.NORMAL);
+            blurWide = new BlurMaskFilter(w * 0.030f, BlurMaskFilter.Blur.NORMAL);
             if (changed && state != STATE_MENU) {
                 buildLevel(level);
             }

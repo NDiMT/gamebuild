@@ -9,13 +9,13 @@ import java.util.Random;
 /**
  * Procedural audio for KEPLER - including the soundtrack.
  *
- * The background music is Chopin's Prelude in E minor, Op. 28 No. 4
- * (public domain): the slow chromatic lament of repeated chords under
- * a long singing melody, synthesized note by note into a looping PCM
- * buffer with a felt-piano tone and a faint pad. The closing dominant
- * bar resolves back into E minor as the loop wraps, and note tails wrap
- * around the seam, so the loop is endless and seamless. No audio files
- * ship with the APK.
+ * The background music is Satie's Gymnopedie No. 1 (public domain):
+ * the floating bass-then-chord sway in slow 3/4 under the famous
+ * weightless melody, synthesized note by note into a looping PCM
+ * buffer with a soft felt-piano tone. The second phrase settles on
+ * F# over the returning G major seventh - the signature suspension -
+ * so the loop folds back into itself seamlessly, with note tails
+ * wrapping the seam. No audio files ship with the APK.
  */
 public class SoundFx {
 
@@ -45,12 +45,12 @@ public class SoundFx {
             // no audio is better than no game
         }
 
-        // the prelude takes a moment to render; never block the UI for it
+        // the gymnopedie takes a moment to render; never block the UI for it
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    short[] m = buildChopin();
+                    short[] m = buildGymnopedie();
                     AudioTrack at = new AudioTrack(AudioManager.STREAM_MUSIC,
                             MUSIC_RATE, AudioFormat.CHANNEL_OUT_MONO,
                             AudioFormat.ENCODING_PCM_16BIT,
@@ -70,7 +70,7 @@ public class SoundFx {
                 } catch (Exception ignored) {
                 }
             }
-        }, "chopin-synth");
+        }, "satie-synth");
         t.setDaemon(true);
         t.start();
     }
@@ -128,67 +128,57 @@ public class SoundFx {
         }
     }
 
-    // -------------------------------------- Chopin, Prelude Op. 28 No. 4
+    // ------------------------------------------ Satie, Gymnopedie No. 1
 
     /**
-     * Twelve slow bars (~56 bpm). The left hand pulses soft repeated
-     * chords that sink one chromatic step at a time - the famous lament -
-     * while the right hand holds a long melody that sighs downward from B.
-     * The last bar (B major, the dominant) pulls the loop home to E minor.
+     * Sixteen bars of slow 3/4 (~66 bpm). The accompaniment sways between
+     * G (with a Bm/D color chord) and D (with an A-C#-F# chord); the
+     * famous melody enters on bar five and floats down from F#5. The
+     * second phrase rises to a long F# suspended over the returning
+     * G major seventh, which folds the loop seamlessly back to bar one.
      */
-    private static short[] buildChopin() {
-        int[][] chords = {
-                {59, 64, 67},  // B3 E4 G4   (Em)
-                {58, 64, 67},  // Bb3 E4 G4
-                {57, 64, 67},  // A3 E4 G4
-                {57, 62, 66},  // A3 D4 F#4
-                {57, 62, 65},  // A3 D4 F4
-                {56, 62, 65},  // G#3 D4 F4
-                {55, 60, 64},  // G3 C4 E4
-                {54, 60, 64},  // F#3 C4 E4
-                {54, 59, 62},  // F#3 B3 D4
-                {53, 59, 62},  // F3 B3 D4
-                {52, 59, 64},  // E3 B3 E4   (Em)
-                {47, 54, 63},  // B2 F#3 D#4 (B major - back to the top)
-        };
-        // melody per bar: {midi, startBeat, durationBeats}
-        int[][][] melody = {
-                {{71, 0, 4}},
-                {{71, 0, 2}, {72, 2, 1}, {71, 3, 1}},
-                {{71, 0, 4}},
-                {{69, 0, 4}},
-                {{69, 0, 2}, {71, 2, 1}, {69, 3, 1}},
-                {{67, 0, 4}},
-                {{67, 0, 2}, {69, 2, 1}, {67, 3, 1}},
-                {{66, 0, 4}},
-                {{66, 0, 4}},
-                {{64, 0, 4}},
-                {{64, 0, 4}},
-                {{63, 0, 2}, {66, 2, 1}, {71, 3, 1}},
-        };
-
-        float beat = 60f / 56f;
-        float barDur = beat * 4f;
-        int total = (int) (MUSIC_RATE * barDur * chords.length);
+    private static short[] buildGymnopedie() {
+        float beat = 60f / 66f;
+        float barDur = beat * 3f;
+        int bars = 16;
+        int total = (int) (MUSIC_RATE * barDur * bars);
         float[] acc = new float[total];
 
-        for (int b = 0; b < chords.length; b++) {
-            float barStart = b * barDur;
-            // pulsing chords, eight per bar, barely breathing
-            for (int i = 0; i < 8; i++) {
-                float t0 = barStart + i * beat / 2f;
-                for (int n = 0; n < 3; n++) {
-                    pluck(acc, t0, midi(chords[b][n]), 0.8f, 0.045f);
-                }
+        int[] bassG = {43};            // G2
+        int[] bassD = {38};            // D2
+        int[] chordG = {59, 62, 66};   // B3 D4 F#4
+        int[] chordD = {57, 61, 66};   // A3 C#4 F#4
+
+        for (int b = 0; b < bars; b++) {
+            float t0 = b * barDur;
+            boolean gBar = b % 2 == 0;
+            int bass = gBar ? bassG[0] : bassD[0];
+            int[] chord = gBar ? chordG : chordD;
+            // beat 1: deep bass; beats 2 and 3: the floating chord
+            pluck(acc, t0, midi(bass), 2.2f, 0.085f);
+            for (int n = 0; n < 3; n++) {
+                pluck(acc, t0 + beat, midi(chord[n]), 1.5f, 0.045f);
+                pluck(acc, t0 + beat * 2f, midi(chord[n]), 1.5f, 0.038f);
             }
-            // the singing line
-            int[][] line = melody[b];
-            for (int n = 0; n < line.length; n++) {
-                pluck(acc, barStart + line[n][1] * beat,
-                        midi(line[n][0]), line[n][2] * beat * 1.25f, 0.155f);
-            }
-            // faint pad an octave below the bass note
-            pad(acc, barStart, barDur, midi(chords[b][0] - 12), 0.022f);
+            // gentle pad on the bar's root
+            pad(acc, t0, barDur, midi(bass + 12), 0.020f);
+        }
+
+        // the melody: {midi, bar, beatInBar, durationBeats}
+        int[][] melody = {
+                {78, 4, 0, 1}, {81, 4, 1, 1}, {79, 4, 2, 1},   // F#5 A5 G5
+                {78, 5, 0, 1}, {73, 5, 1, 1}, {71, 5, 2, 1},   // F#5 C#5 B4
+                {73, 6, 0, 1}, {74, 6, 1, 1}, {69, 6, 2, 1},   // C#5 D5 A4
+                {69, 7, 0, 6},                                  // A4 floats
+                {78, 10, 0, 1}, {81, 10, 1, 1}, {79, 10, 2, 1}, // F#5 A5 G5
+                {78, 11, 0, 1}, {73, 11, 1, 1}, {71, 11, 2, 1}, // F#5 C#5 B4
+                {73, 12, 0, 1}, {74, 12, 1, 1}, {76, 12, 2, 1}, // C#5 D5 E5
+                {78, 13, 0, 8},                                 // F#5 suspended...
+        };
+        for (int n = 0; n < melody.length; n++) {
+            float start = melody[n][1] * barDur + melody[n][2] * beat;
+            pluck(acc, start, midi(melody[n][0]),
+                    melody[n][3] * beat * 1.3f, 0.135f);
         }
 
         short[] out = new short[total];
@@ -204,7 +194,7 @@ public class SoundFx {
         return (float) (440.0 * Math.pow(2.0, (m - 69) / 12.0));
     }
 
-    /** Harp-like pluck added into the loop buffer; tails wrap the seam. */
+    /** Felt-piano pluck added into the loop buffer; tails wrap the seam. */
     private static void pluck(float[] acc, float start, float freq,
                               float dur, float vol) {
         int n = (int) (MUSIC_RATE * dur);
@@ -212,10 +202,10 @@ public class SoundFx {
         double w = 2 * Math.PI * freq / MUSIC_RATE;
         for (int i = 0; i < n; i++) {
             double t = i / (double) MUSIC_RATE;
-            double env = Math.exp(-4.2 * t / dur) * Math.min(1.0, i / (MUSIC_RATE * 0.003));
+            double env = Math.exp(-4.2 * t / dur) * Math.min(1.0, i / (MUSIC_RATE * 0.012));
             double s = Math.sin(w * i)
-                    + 0.38 * Math.sin(2 * w * i) * Math.exp(-7.0 * t)
-                    + 0.12 * Math.sin(3 * w * i) * Math.exp(-9.0 * t);
+                    + 0.30 * Math.sin(2 * w * i) * Math.exp(-7.0 * t)
+                    + 0.08 * Math.sin(3 * w * i) * Math.exp(-9.0 * t);
             acc[(s0 + i) % acc.length] += (float) (s * env * vol);
         }
     }
