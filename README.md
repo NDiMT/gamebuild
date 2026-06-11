@@ -1,28 +1,29 @@
-# PULSE
+# RUSH
 
-Ένα one-tap arcade παιχνίδι για Android, σχεδιασμένο γύρω από τους κλασικούς
-μηχανισμούς εθισμού των hyper-casual παιχνιδιών: άμεση επανεκκίνηση, combo
-multipliers, near-miss bonuses και διαρκώς αυξανόμενη ταχύτητα.
+Ένας neon endless runner για Android (στο πνεύμα του Geometry Dash), χτισμένος
+γύρω από τους κλασικούς μηχανισμούς εθισμού των hyper-casual παιχνιδιών:
+άμεση επανεκκίνηση, near-miss bonuses, ταχύτητα που κλιμακώνεται και "gears".
 
 ## Gameplay
 
-- Μια μπάλα περιστρέφεται πάνω σε έναν δακτύλιο.
-- **Tap** οπουδήποτε = αντιστροφή κατεύθυνσης.
-- Μάζεψε τα **gems** (διαμάντια) — απόφυγε τα κόκκινα **spikes**.
-- Συνεχόμενα gems μέσα σε 4" χτίζουν **combo x2…x8** (πολλαπλασιαστής πόντων).
-- Αντιστροφή την τελευταία στιγμή πριν από spike = **"CLOSE!" bonus** (+5).
-- Η ταχύτητα και ο αριθμός των spikes ανεβαίνουν όσο μαζεύεις gems· το χρώμα
-  του κόσμου αλλάζει ανά 10 gems.
-- High score, runs και συνολικά gems αποθηκεύονται τοπικά. Τίτλοι κατάταξης
-  από ROOKIE μέχρι GOD MODE.
+- Ένας κύβος τρέχει μέσα σε synthwave κόσμο που επιταχύνει συνεχώς.
+- **Tap** = άλμα. **Tap στον αέρα** = διπλό άλμα.
+- Απόφυγε τα κόκκινα **spikes**, πήδα πάνω ή πέρα από τα **blocks**,
+  μάζεψε τα **coins** (+5 πόντοι το καθένα).
+- Πέρασμα ξυστά πάνω από spike = **"CLOSE!" bonus** (+5).
+- Κάθε 11" ανεβαίνει **GEAR**: περισσότερη ταχύτητα, πιο πυκνά εμπόδια,
+  νέο χρώμα κόσμου (μέχρι GEAR 9).
+- Score = απόσταση + coins + bonuses. Best score, runs και συνολικά coins
+  αποθηκεύονται τοπικά. Τίτλοι κατάταξης από ROOKIE μέχρι GOD MODE.
 
-Όλα τα γραφικά είναι procedural (Canvas) και όλοι οι ήχοι συντίθενται σε
-PCM κατά την εκκίνηση — το APK δεν περιέχει κανένα asset, γι' αυτό είναι ~70 KB.
+Όλα τα γραφικά είναι procedural (Canvas/SurfaceView) και όλοι οι ήχοι
+συντίθενται σε PCM κατά την εκκίνηση — το APK δεν περιέχει κανένα asset,
+γι' αυτό είναι ~65 KB.
 
 ## Έτοιμο APK
 
 Το χτισμένο, υπογεγραμμένο (debug v1+v2+v3) APK βρίσκεται στο
-[`dist/PULSE.apk`](dist/PULSE.apk). Υποστηρίζει Android 5.0+ (API 21).
+[`dist/RUSH.apk`](dist/RUSH.apk). Υποστηρίζει Android 5.0+ (API 21).
 Εγκατάσταση: μεταφορά στη συσκευή και άνοιγμα (απαιτεί "Install unknown apps").
 
 ## Build
@@ -45,16 +46,19 @@ Maven Central + GitHub mirrors):
 
 ```bash
 ./scripts/fetch-tools.sh    # κατεβάζει android.jar, aapt2, dx, signer
-./scripts/build-offline.sh  # παράγει dist/PULSE.apk
+./scripts/build-offline.sh  # παράγει dist/RUSH.apk
 ```
 
 ## Δομή
 
 ```
-app/src/main/java/gr/happyonline/pulse/
+app/src/main/java/gr/happyonline/rush/
   MainActivity.java   # fullscreen activity + lifecycle
-  GameView.java       # game loop, physics, rendering, states
+  GameView.java       # game loop, physics, collisions, rendering, states
   SoundFx.java        # procedural PCM sound synthesis
 tools/icon_gen.py     # δημιουργεί τα launcher icons (pure Python)
 scripts/              # offline build pipeline
 ```
+
+> Σημείωση: η πρώτη έκδοση του repo περιείχε το παιχνίδι **PULSE**
+> (one-tap orbit dodger) — υπάρχει ακόμα στο git history.

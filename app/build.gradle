@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'gr.happyonline.pulse'
+    namespace 'gr.happyonline.rush'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'gr.happyonline.pulse'
+        applicationId 'gr.happyonline.rush'
         minSdk 21
         targetSdk 34
         versionCode 1

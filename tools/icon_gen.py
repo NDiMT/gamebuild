@@ -26,8 +26,7 @@ def write_png(path, w, h, pixels):
 
 def sample(u, v):
     """Scene in [-1, 1] coords. Returns (r, g, b, a) floats 0..1."""
-    r2 = u * u + v * v
-    d = math.sqrt(r2)
+    d = math.hypot(u, v)
 
     # rounded-square plate
     k = 0.86
@@ -40,39 +39,57 @@ def sample(u, v):
     base = 0.10 + 0.07 * max(0.0, 1.0 - d * 1.2)
     cr, cg, cb = base * 0.55, base * 0.75, base * 1.6
 
-    ring_r = 0.58
-    rd = abs(d - ring_r)
+    ground = 0.42
 
-    # cyan glow + crisp ring
-    glow = math.exp(-(rd / 0.16) ** 2) * 0.55
-    cr += 0.00 * glow
+    # neon ground line + glow
+    gd = abs(v - ground)
+    glow = math.exp(-(gd / 0.14) ** 2) * 0.5
     cg += 0.85 * glow
     cb += 1.00 * glow
-    if rd < 0.045:
+    if gd < 0.035 :
         cr, cg, cb = 0.25, 0.95, 1.0
 
-    # ball at 40 degrees
-    ba = math.radians(40)
-    bx, by = math.cos(ba) * ring_r, -math.sin(ba) * ring_r
-    bd = math.hypot(u - bx, v - by)
-    bglow = math.exp(-(bd / 0.16) ** 2) * 0.9
+    # perspective grid under the ground line
+    if v > ground + 0.03:
+        depth = (v - ground) / (1.0 - ground)
+        gx = u / (0.35 + 0.65 * depth)
+        if abs((gx * 3.0 + 0.5) % 1.0 - 0.5) < 0.045:
+            cg += 0.35
+            cb += 0.4
+
+    # the running cube (slightly tilted, mid-jump) with trail
+    cxp, cyp = 0.10, ground - 0.34
+    ca, sa = math.cos(math.radians(14)), math.sin(math.radians(14))
+    ru = (u - cxp) * ca - (v - cyp) * sa
+    rv = (u - cxp) * sa + (v - cyp) * ca
+    half = 0.21
+    bd = max(abs(ru), abs(rv))
+    bglow = math.exp(-(max(0.0, bd - half) / 0.12) ** 2) * 0.8
     cr += 1.0 * bglow
     cg += 0.85 * bglow
     cb += 0.95 * bglow
-    if bd < 0.085:
+    if bd < half:
         cr, cg, cb = 1.0, 1.0, 1.0
+        # eyes
+        if (math.hypot(ru - 0.08, rv + 0.05) < 0.035
+                or math.hypot(ru + 0.01, rv + 0.05) < 0.035):
+            cr, cg, cb = 0.06, 0.07, 0.11
+    # speed trail to the left of the cube
+    for i in range(1, 4):
+        tx = cxp - i * 0.16
+        td = max(abs((u - tx) * ca - (v - cyp) * sa), abs((u - tx) * sa + (v - cyp) * ca))
+        if td < half * (1.0 - i * 0.18):
+            fade = 0.5 / i
+            cr += fade
+            cg += fade * 0.9
+            cb += fade
 
-    # gem (diamond) at 215 degrees
-    ga = math.radians(215)
-    gx, gy = math.cos(ga) * ring_r, -math.sin(ga) * ring_r
-    if abs(u - gx) + abs(v - gy) < 0.10:
-        cr, cg, cb = 1.0, 0.84, 0.25
-
-    # spike (red wedge) at 330 degrees
-    sa = math.radians(330)
-    sx, sy = math.cos(sa) * ring_r, -math.sin(sa) * ring_r
-    if math.hypot(u - sx, v - sy) < 0.085:
-        cr, cg, cb = 1.0, 0.24, 0.35
+    # red spike on the ground, right side
+    spx = 0.52
+    if v <= ground and v > ground - 0.30:
+        hwid = 0.16 * (1.0 - (ground - v) / 0.30)
+        if abs(u - spx) < hwid:
+            cr, cg, cb = 1.0, 0.24, 0.35
 
     aa = min(1.0, -plate / 0.02)  # soft edge on the plate
     return (min(cr, 1.0), min(cg, 1.0), min(cb, 1.0), aa)

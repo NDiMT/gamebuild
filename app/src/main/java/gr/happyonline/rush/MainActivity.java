@@ -1,4 +1,4 @@
-package gr.happyonline.pulse;
+package gr.happyonline.rush;
 
 import android.app.Activity;
 import android.os.Bundle;
