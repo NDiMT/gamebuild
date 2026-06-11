@@ -1,4 +1,4 @@
-package gr.happyonline.swarm;
+package gr.happyonline.echo;
 
 import android.app.Activity;
 import android.os.Bundle;

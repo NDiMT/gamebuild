@@ -34,7 +34,7 @@ echo "==> aapt2 compile"
 
 echo "==> aapt2 link"
 # the Gradle build supplies the package via 'namespace'; inject it here
-sed 's/<manifest /<manifest package="gr.happyonline.swarm" /' \
+sed 's/<manifest /<manifest package="gr.happyonline.echo" /' \
     "$SRC/AndroidManifest.xml" > "$OUT/AndroidManifest.xml"
 "$AAPT2" link \
     -I "$ANDROID_JAR" \
@@ -60,8 +60,8 @@ echo "==> package + align + sign"
 "$ZIPALIGN" -f 4 "$OUT/apk/base.apk" "$OUT/apk/aligned.apk"
 java -jar "$SIGNER_JAR" --apks "$OUT/apk/aligned.apk" --allowResign >/dev/null
 
-cp "$OUT/apk/aligned-aligned-debugSigned.apk" "$DIST/SWARM.apk" 2>/dev/null \
-    || cp "$OUT/apk/"aligned-*Signed*.apk "$DIST/SWARM.apk"
+cp "$OUT/apk/aligned-aligned-debugSigned.apk" "$DIST/ECHO.apk" 2>/dev/null \
+    || cp "$OUT/apk/"aligned-*Signed*.apk "$DIST/ECHO.apk"
 
-echo "==> done: $DIST/SWARM.apk"
-ls -la "$DIST/SWARM.apk"
+echo "==> done: $DIST/ECHO.apk"
+ls -la "$DIST/ECHO.apk"

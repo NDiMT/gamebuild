@@ -39,45 +39,53 @@ def sample(u, v):
     base = 0.10 + 0.07 * max(0.0, 1.0 - d * 1.2)
     cr, cg, cb = base * 0.55, base * 0.75, base * 1.6
 
-    # a swarm of fireflies sweeping in a comet curve
-    fireflies = [
-        (-0.42, 0.30, 0.050), (-0.30, 0.12, 0.060), (-0.16, -0.02, 0.065),
-        (-0.02, -0.14, 0.075), (0.14, -0.22, 0.085), (0.32, -0.26, 0.100),
-        (-0.34, 0.34, 0.040), (-0.20, 0.20, 0.045), (-0.06, 0.06, 0.050),
-        (0.10, -0.04, 0.055), (0.26, -0.10, 0.050), (0.05, -0.30, 0.045),
-        (0.42, -0.40, 0.060), (-0.10, -0.26, 0.040),
+    # ECHO: a white dot pursued by colored ghosts of itself along a loop
+    def loop_pos(t):
+        return (0.36 * math.cos(t), -0.36 * math.sin(t * 1.4) - 0.05)
+
+    ghosts = [
+        (2.4, (0.25, 0.95, 1.0)),   # cyan
+        (3.3, (1.0, 0.35, 0.85)),   # magenta
+        (4.2, (1.0, 0.78, 0.25)),   # amber
     ]
-    for fx, fy, fr in fireflies:
-        d2 = math.hypot(u - fx, v - fy)
-        glow = math.exp(-((d2 / (fr * 3.2)) ** 2)) * 0.55
-        cr += 1.00 * glow
-        cg += 0.92 * glow
-        cb += 0.45 * glow
-        if d2 < fr:
-            cr, cg, cb = 1.0, 0.97, 0.82
+    # ghost breadcrumb trails
+    for t0, (gr_, gg_, gb_) in ghosts:
+        for s in range(6):
+            tx, ty = loop_pos(t0 - s * 0.18)
+            td = math.hypot(u - tx, v - ty)
+            rr = 0.045 * (1.0 - s * 0.13)
+            if td < rr:
+                fade = 0.8 - s * 0.12
+                cr += gr_ * fade
+                cg += gg_ * fade
+                cb += gb_ * fade
+        gx, gy = loop_pos(t0)
+        gd = math.hypot(u - gx, v - gy)
+        glow = math.exp(-((gd / 0.13) ** 2)) * 0.5
+        cr += gr_ * glow
+        cg += gg_ * glow
+        cb += gb_ * glow
+        if gd < 0.07:
+            cr, cg, cb = gr_, gg_, gb_
 
-    # red obstacle slab on the right edge
-    if 0.62 < u < 0.84 and -0.9 < v < 0.45:
-        cr, cg, cb = 0.16, 0.10, 0.20
-        if u < 0.66 or u > 0.80 or v < -0.86 or v > 0.41:
-            cr, cg, cb = 1.0, 0.24, 0.35
-    else:
-        sd = max(0.62 - u, u - 0.84, -0.9 - v, v - 0.45)
-        if sd < 0.10:
-            k = math.exp(-((sd / 0.07) ** 2)) * 0.35
-            cr += k
-            cg += k * 0.2
-            cb += k * 0.25
+    # the player: bright white, one step ahead
+    pxp, pyp = loop_pos(1.5)
+    pd = math.hypot(u - pxp, v - pyp)
+    pglow = math.exp(-((pd / 0.18) ** 2)) * 0.85
+    cr += pglow
+    cg += pglow
+    cb += pglow
+    if pd < 0.085:
+        cr, cg, cb = 1.0, 1.0, 1.0
 
-    # cyan orb bottom-left
-    od = math.hypot(u + 0.45, v + 0.52)
-    oglow = math.exp(-((od / 0.16) ** 2)) * 0.6
-    cg += 0.8 * oglow
-    cb += 1.0 * oglow
-    if 0.055 < od < 0.085:
-        cr, cg, cb = 0.25, 0.90, 1.0
-    elif od < 0.035:
-        cr, cg, cb = 0.25, 0.90, 1.0
+    # golden orb top-right
+    od = math.hypot(u - 0.52, v + 0.52)
+    oglow = math.exp(-((od / 0.14) ** 2)) * 0.55
+    cr += 1.0 * oglow
+    cg += 0.85 * oglow
+    cb += 0.3 * oglow
+    if od < 0.05:
+        cr, cg, cb = 1.0, 0.88, 0.5
 
     aa = min(1.0, -plate / 0.02)  # soft edge on the plate
     return (min(cr, 1.0), min(cg, 1.0), min(cb, 1.0), aa)
