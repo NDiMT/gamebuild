@@ -9,11 +9,12 @@ import java.util.Random;
 /**
  * Procedural audio for KEPLER - including the soundtrack.
  *
- * The background music is J.S. Bach's Prelude in C major (BWV 846,
- * public domain), synthesized note by note into a looping PCM buffer
- * with a soft harp-like pluck and a faint string pad. The loop seam is
- * seamless because note tails wrap around to the start of the buffer.
- * No audio files ship with the APK.
+ * The background music is Pachelbel's Canon in D (public domain),
+ * synthesized note by note into a looping PCM buffer: the famous ground
+ * bass, two harp-like arpeggio voices an octave apart, and a faint
+ * string pad. The final A major bar resolves straight back into D as
+ * the loop wraps, and note tails wrap around the seam, so the loop is
+ * endless and seamless. No audio files ship with the APK.
  */
 public class SoundFx {
 
@@ -43,12 +44,12 @@ public class SoundFx {
             // no audio is better than no game
         }
 
-        // the prelude takes a moment to render; never block the UI for it
+        // the canon takes a moment to render; never block the UI for it
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    short[] m = buildPrelude();
+                    short[] m = buildCanon();
                     AudioTrack at = new AudioTrack(AudioManager.STREAM_MUSIC,
                             MUSIC_RATE, AudioFormat.CHANNEL_OUT_MONO,
                             AudioFormat.ENCODING_PCM_16BIT,
@@ -68,7 +69,7 @@ public class SoundFx {
                 } catch (Exception ignored) {
                 }
             }
-        }, "prelude-synth");
+        }, "canon-synth");
         t.setDaemon(true);
         t.start();
     }
@@ -126,41 +127,49 @@ public class SoundFx {
         }
     }
 
-    // ----------------------------------------------------- Bach, BWV 846
+    // ------------------------------------------------- Pachelbel, Canon in D
 
     /**
-     * First eight bars of the Prelude in C, ~72 bpm. Each bar is five
-     * pitches arpeggiated in Bach's fixed sixteenth-note figuration.
-     * The final bar (Cmaj7 over B) leads the loop gently back to C.
+     * Eight bars, one chord each, ~70 bpm: D - A - Bm - F#m - G - D - G - A.
+     * Ground bass on the downbeat, a flowing eighth-note arpeggio, and the
+     * same arpeggio echoed an octave higher between the beats.
      */
-    private static short[] buildPrelude() {
-        int[][] bars = {
-                {60, 64, 67, 72, 76},  // C major
-                {60, 62, 69, 74, 77},  // Dm7 / C
-                {59, 62, 67, 74, 77},  // G7 / B
-                {60, 64, 67, 72, 76},  // C major
-                {60, 64, 69, 76, 81},  // Am / C
-                {60, 62, 66, 69, 74},  // D7 / C
-                {59, 62, 67, 74, 79},  // G / B
-                {59, 60, 64, 67, 72},  // Cmaj7 / B
+    private static short[] buildCanon() {
+        // chord tones as [root, third, fifth, octave] in a singing register
+        int[][] chords = {
+                {62, 66, 69, 74},  // D major
+                {57, 61, 64, 69},  // A major
+                {59, 62, 66, 71},  // B minor
+                {54, 57, 61, 66},  // F# minor
+                {55, 59, 62, 67},  // G major
+                {62, 66, 69, 74},  // D major
+                {55, 59, 62, 67},  // G major
+                {57, 61, 64, 69},  // A major
         };
-        int[] figure = {0, 1, 2, 3, 4, 2, 3, 4, 0, 1, 2, 3, 4, 2, 3, 4};
+        int[] bass = {50, 45, 47, 42, 43, 50, 43, 45}; // the famous ground
+        int[] figure = {0, 2, 3, 2, 1, 2, 3, 2};       // gentle rise and fall
 
-        float barDur = 3.33f;            // ~72 bpm, 4/4
-        float sixteenth = barDur / 16f;
-        int total = (int) (MUSIC_RATE * barDur * bars.length);
+        float beat = 60f / 70f;
+        float barDur = beat * 4f;
+        float eighth = beat / 2f;
+        int total = (int) (MUSIC_RATE * barDur * chords.length);
         float[] acc = new float[total];
 
-        for (int b = 0; b < bars.length; b++) {
+        for (int b = 0; b < chords.length; b++) {
             float barStart = b * barDur;
-            for (int i = 0; i < 16; i++) {
-                float t0 = barStart + i * sixteenth;
-                float freq = midi(bars[b][figure[i]]);
-                pluck(acc, t0, freq, 0.9f, 0.135f);
+            // ground bass: one long warm note per bar
+            pluck(acc, barStart, midi(bass[b]), 2.4f, 0.105f);
+            // main arpeggio voice
+            for (int i = 0; i < 8; i++) {
+                float t0 = barStart + i * eighth;
+                pluck(acc, t0, midi(chords[b][figure[i]]), 1.0f, 0.115f);
+                // echo voice: an octave up, floating between the beats
+                pluck(acc, t0 + eighth * 0.5f,
+                        midi(chords[b][figure[i]] + 12), 0.8f, 0.052f);
             }
-            // faint string pad: root an octave down + the fifth
-            pad(acc, barStart, barDur, midi(bars[b][0] - 12), 0.030f);
-            pad(acc, barStart, barDur, midi(bars[b][2]), 0.018f);
+            // faint string pad: root + fifth
+            pad(acc, barStart, barDur, midi(chords[b][0] - 12), 0.026f);
+            pad(acc, barStart, barDur, midi(chords[b][2]), 0.016f);
         }
 
         short[] out = new short[total];

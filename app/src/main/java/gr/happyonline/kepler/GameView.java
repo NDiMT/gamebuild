@@ -2,9 +2,11 @@ package gr.happyonline.kepler;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
@@ -98,6 +100,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private final RectF arcRect = new RectF();
     private Shader nebulaA, nebulaB, nebulaC, nebulaD;
     private BlurMaskFilter blurSmall, blurMed, blurBig;
+    private Bitmap galaxy;
 
     private static class Planet {
         float baseX, y, r, x;
@@ -588,24 +591,34 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawSky(Canvas c) {
-        c.drawColor(0xFF0A0A1E);
-        // drifting nebulas - violet, teal, magenta, gold
-        drawNebula(c, nebulaA, width * (0.30f + 0.06f * (float) Math.sin(menuT * 0.11f)),
-                height * (0.25f + 0.04f * (float) Math.cos(menuT * 0.13f)));
-        drawNebula(c, nebulaB, width * (0.75f + 0.05f * (float) Math.cos(menuT * 0.09f)),
-                height * (0.62f + 0.05f * (float) Math.sin(menuT * 0.07f)));
-        drawNebula(c, nebulaC, width * (0.15f + 0.05f * (float) Math.sin(menuT * 0.08f + 2f)),
-                height * (0.85f + 0.03f * (float) Math.cos(menuT * 0.12f)));
-        drawNebula(c, nebulaD, width * (0.85f + 0.05f * (float) Math.sin(menuT * 0.06f + 4f)),
-                height * (0.10f + 0.04f * (float) Math.sin(menuT * 0.10f)));
+        // the pre-rendered galaxy, drifting almost imperceptibly
+        if (galaxy != null) {
+            float ox = (float) Math.sin(menuT * 0.045f) * width * 0.022f;
+            float oy = (float) Math.cos(menuT * 0.034f) * height * 0.013f;
+            c.save();
+            c.translate(-width * 0.04f + ox, -height * 0.03f + oy);
+            c.scale(1.08f, 1.07f);
+            c.drawBitmap(galaxy, 0, 0, null);
+            c.restore();
+        } else {
+            c.drawColor(0xFF0A0A1E);
+        }
 
-        // stars in warm and cool tints
+        // living aurora veils breathing over the still sky
+        breatheNebula(c, nebulaA, width * (0.30f + 0.06f * (float) Math.sin(menuT * 0.11f)),
+                height * (0.25f + 0.04f * (float) Math.cos(menuT * 0.13f)),
+                0.55f + 0.45f * (float) Math.sin(menuT * 0.23f));
+        breatheNebula(c, nebulaC, width * (0.72f + 0.05f * (float) Math.sin(menuT * 0.08f + 2f)),
+                height * (0.70f + 0.04f * (float) Math.cos(menuT * 0.10f)),
+                0.55f + 0.45f * (float) Math.sin(menuT * 0.17f + 3f));
+
+        // twinkling foreground stars in warm and cool tints
         paint.setStyle(Paint.Style.FILL);
-        for (int i = 0; i < 60; i++) {
+        for (int i = 0; i < 48; i++) {
             float sx = (i * 379f + 53f) % width;
             float sy = (i * 233f + 89f) % height;
             float tw = 0.5f + 0.5f * (float) Math.sin(menuT * (0.8f + i % 5 * 0.3f) + i);
-            int a = (int) (16 + 46 * tw);
+            int a = (int) (16 + 52 * tw);
             int col;
             switch (i % 4) {
                 case 0: col = Color.argb(a, 255, 220, 180); break;
@@ -618,9 +631,107 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             c.drawCircle(sx, sy, r, paint);
             if (i % 6 == 0) {
                 paint.setColor((col & 0x00FFFFFF) | ((a / 3) << 24));
-                c.drawCircle(sx, sy, r * 3f, paint);
+                c.drawCircle(sx, sy, r * 3.2f, paint);
             }
         }
+    }
+
+    private void breatheNebula(Canvas c, Shader s, float x, float y, float breath) {
+        if (s == null) return;
+        c.save();
+        c.translate(x, y);
+        paint.setShader(s);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setAlpha((int) (90 + 130 * breath));
+        c.drawCircle(0, 0, width * 0.85f, paint);
+        paint.setShader(null);
+        paint.setAlpha(255);
+        c.restore();
+    }
+
+    /** Paints the whole galaxy once: base glow, Milky Way, nebulas, dust. */
+    private Bitmap buildGalaxy(int w, int h) {
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas bc = new Canvas(bmp);
+        Paint bp = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Random r = new Random(7L);
+
+        // deep space base
+        bp.setShader(new LinearGradient(0, 0, w * 0.3f, h,
+                new int[]{0xFF161038, 0xFF0C0A24, 0xFF060616},
+                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+        bc.drawRect(0, 0, w, h, bp);
+        bp.setShader(null);
+
+        // colorful nebula clouds, layered and overlapping
+        int[][] pal = {
+                {214, 64, 168}, {124, 76, 230}, {46, 170, 214}, {238, 158, 64},
+                {244, 84, 128}, {84, 100, 240}, {64, 210, 170}, {170, 80, 235},
+        };
+        for (int i = 0; i < 11; i++) {
+            int[] cl = pal[r.nextInt(pal.length)];
+            float nx = r.nextFloat() * w;
+            float ny = r.nextFloat() * h;
+            float nr = w * (0.22f + r.nextFloat() * 0.42f);
+            bp.setShader(new RadialGradient(nx, ny, nr,
+                    new int[]{Color.argb(0x52, cl[0], cl[1], cl[2]),
+                            Color.argb(0x24, cl[0], cl[1], cl[2]), 0x00000000},
+                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+            bc.drawCircle(nx, ny, nr, bp);
+            bp.setShader(null);
+        }
+
+        // the Milky Way: a soft diagonal river of light full of dust
+        bc.save();
+        bc.rotate(-32f, w / 2f, h / 2f);
+        bp.setShader(new LinearGradient(0, h / 2f - h * 0.26f, 0, h / 2f + h * 0.26f,
+                new int[]{0x00000000, 0x2ECABDF5, 0x4AE6D9FF, 0x2ECABDF5, 0x00000000},
+                new float[]{0f, 0.30f, 0.5f, 0.70f, 1f}, Shader.TileMode.CLAMP));
+        bc.drawRect(-w, -h, w * 2f, h * 2f, bp);
+        bp.setShader(null);
+        bp.setStyle(Paint.Style.FILL);
+        for (int i = 0; i < 520; i++) {
+            float x = -w + r.nextFloat() * w * 3f;
+            float gy = (float) (r.nextGaussian() * h * 0.085f) + h / 2f;
+            int a = 18 + r.nextInt(95);
+            bp.setColor(Color.argb(a, 235, 228, 255));
+            bc.drawCircle(x, gy, w * (0.0007f + r.nextFloat() * 0.0017f), bp);
+        }
+        bc.restore();
+
+        // scattered field stars with soft halos
+        for (int i = 0; i < 240; i++) {
+            float x = r.nextFloat() * w;
+            float y = r.nextFloat() * h;
+            int a = 28 + r.nextInt(110);
+            int[] cl = pal[r.nextInt(pal.length)];
+            int tint = r.nextInt(3);
+            int cr2 = tint == 0 ? 255 : 200 + cl[0] / 5;
+            int cg2 = tint == 0 ? 244 : 205 + cl[1] / 6;
+            int cb2 = tint == 0 ? 230 : 215 + cl[2] / 7;
+            float rad = w * (0.0009f + r.nextFloat() * 0.0022f);
+            bp.setColor(Color.argb(a / 3, cr2, cg2, cb2));
+            bc.drawCircle(x, y, rad * 3.2f, bp);
+            bp.setColor(Color.argb(a, cr2, cg2, cb2));
+            bc.drawCircle(x, y, rad, bp);
+        }
+
+        // a few distant fuzzy galaxies
+        for (int i = 0; i < 4; i++) {
+            float gx = r.nextFloat() * w;
+            float gy2 = r.nextFloat() * h;
+            float gr = w * (0.02f + r.nextFloat() * 0.025f);
+            bc.save();
+            bc.rotate(r.nextFloat() * 180f, gx, gy2);
+            bc.scale(1f, 0.42f, gx, gy2);
+            bp.setShader(new RadialGradient(gx, gy2, gr * 2.6f,
+                    new int[]{0x66EFE6FF, 0x2ABBA8E8, 0x00000000},
+                    new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+            bc.drawCircle(gx, gy2, gr * 2.6f, bp);
+            bp.setShader(null);
+            bc.restore();
+        }
+        return bmp;
     }
 
     private void drawNebula(Canvas c, Shader s, float x, float y) {
@@ -1073,6 +1184,10 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             blurSmall = new BlurMaskFilter(w * 0.008f, BlurMaskFilter.Blur.NORMAL);
             blurMed = new BlurMaskFilter(w * 0.022f, BlurMaskFilter.Blur.NORMAL);
             blurBig = new BlurMaskFilter(w * 0.05f, BlurMaskFilter.Blur.NORMAL);
+            if (galaxy != null) {
+                galaxy.recycle();
+            }
+            galaxy = buildGalaxy(w, hpx);
             for (int i = 0; i < planets.size(); i++) {
                 Planet p = planets.get(i);
                 p.glow = planetGlow(p.hue, p.r, p.repulse);
