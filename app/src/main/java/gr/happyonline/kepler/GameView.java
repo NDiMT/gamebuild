@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.PixelFormat;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -100,7 +101,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF arcRect = new RectF();
     private Shader skyShader;
-    private Shader washA, washB, washC;
     private DashPathEffect bandDash;
     private BlurMaskFilter blurGlow, blurWide;
 
@@ -138,6 +138,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         super(context);
         holder = getHolder();
         holder.addCallback(this);
+        // full 8-bit color so the soft gradients never band into stripes
+        holder.setFormat(PixelFormat.RGBA_8888);
         setFocusable(true);
 
         prefs = context.getSharedPreferences("kepler", Context.MODE_PRIVATE);
@@ -597,7 +599,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawSky(Canvas c) {
-        // deep gradient under wide out-of-focus color washes
+        // a quiet chart-paper sky: one soft gradient, sparse stars
+        // resting in faint bokeh halos
         if (skyShader != null) {
             paint.setShader(skyShader);
             paint.setStyle(Paint.Style.FILL);
@@ -606,17 +609,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         } else {
             c.drawColor(0xFF0E1018);
         }
-        drawWash(c, washA, width * (0.28f + 0.05f * (float) Math.sin(menuT * 0.07f)),
-                height * (0.22f + 0.03f * (float) Math.cos(menuT * 0.09f)),
-                0.6f + 0.4f * (float) Math.sin(menuT * 0.16f));
-        drawWash(c, washB, width * (0.78f + 0.04f * (float) Math.cos(menuT * 0.06f)),
-                height * (0.58f + 0.04f * (float) Math.sin(menuT * 0.08f)),
-                0.6f + 0.4f * (float) Math.sin(menuT * 0.13f + 2f));
-        drawWash(c, washC, width * (0.22f + 0.04f * (float) Math.sin(menuT * 0.05f + 4f)),
-                height * (0.86f + 0.03f * (float) Math.cos(menuT * 0.07f)),
-                0.6f + 0.4f * (float) Math.sin(menuT * 0.11f + 5f));
-
-        // sparse stars, each wrapped in a faint bokeh halo
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < 70; i++) {
             float sx = (i * 379f + 53f) % width;
@@ -624,24 +616,11 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             float tw = 0.6f + 0.4f * (float) Math.sin(menuT * (0.5f + i % 4 * 0.2f) + i);
             int a = (int) (24 + 44 * tw);
             float r = Math.max(1f, width * 0.0011f) * (i % 5 == 0 ? 1.5f : 1f);
-            paint.setColor(Color.argb(a / 3, 226, 232, 245));
-            c.drawCircle(sx, sy, r * 3.4f, paint);
+            paint.setColor(Color.argb(a / 4, 226, 232, 245));
+            c.drawCircle(sx, sy, r * 2.6f, paint);
             paint.setColor(Color.argb(a, 226, 232, 245));
             c.drawCircle(sx, sy, r, paint);
         }
-    }
-
-    private void drawWash(Canvas c, Shader s, float x, float y, float breath) {
-        if (s == null) return;
-        c.save();
-        c.translate(x, y);
-        paint.setShader(s);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setAlpha((int) (150 + 105 * breath));
-        c.drawCircle(0, 0, width * 0.95f, paint);
-        paint.setShader(null);
-        paint.setAlpha(255);
-        c.restore();
     }
 
     private float hairline() {
@@ -1067,15 +1046,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             skyShader = new LinearGradient(0, 0, w * 0.2f, hpx,
                     new int[]{0xFF131521, 0xFF0E1018, 0xFF0A0B10},
                     new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
-            washA = new RadialGradient(0, 0, w * 0.95f,
-                    new int[]{0x30485ACC, 0x16283070, 0x00000000},
-                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
-            washB = new RadialGradient(0, 0, w * 0.85f,
-                    new int[]{0x282E9AA0, 0x12205058, 0x00000000},
-                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
-            washC = new RadialGradient(0, 0, w * 0.80f,
-                    new int[]{0x26A05A90, 0x12502848, 0x00000000},
-                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
             bandDash = new DashPathEffect(
                     new float[]{w * 0.0045f, w * 0.014f}, 0f);
             blurGlow = new BlurMaskFilter(w * 0.011f, BlurMaskFilter.Blur.NORMAL);
