@@ -2,6 +2,7 @@ package gr.happyonline.kepler;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -35,7 +36,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private static final float TAU = (float) (Math.PI * 2.0);
     private static final int SUBSTEPS = 4;
     private static final float FLIGHT_TIMEOUT = 14f;
-    private static final float BAND_GRACE = 0.55f;
+    private static final float BAND_GRACE = 0.9f;
+    private static final float CAPTURE_SWEEP = TAU * 0.8f; // ~290° is enough
 
     private final SurfaceHolder holder;
     private final Object lock = new Object();
@@ -91,9 +93,11 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private final ArrayList<FloatText> texts = new ArrayList<FloatText>();
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF arcRect = new RectF();
-    private Shader nebulaA, nebulaB, nebulaC;
+    private Shader nebulaA, nebulaB, nebulaC, nebulaD;
+    private BlurMaskFilter blurSmall, blurMed, blurBig;
 
     private static class Planet {
         float baseX, y, r, x;
@@ -104,6 +108,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         float oscAmp, oscSpeed, oscPhase;
         float hue;
         float bloom;      // flash when it gains a moon
+        Shader glow;      // soft radial body, no hard edges
     }
 
     private static class Moon {
@@ -159,7 +164,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 p.r = width * (0.055f + rng.nextFloat() * 0.035f);
                 p.baseX = width * 0.22f + rng.nextFloat() * width * 0.56f;
                 p.y = height * (0.16f + 0.22f * i) + rng.nextFloat() * height * 0.10f;
-                float bandOut = p.r * (2.9f - Math.min(0.7f, lvl * 0.035f));
+                float bandOut = p.r * (3.3f - Math.min(0.8f, lvl * 0.03f));
                 if (dist(p.baseX, p.y, startX, startY) < bandOut + width * 0.16f) continue;
                 boolean clear = true;
                 for (int j = 0; j < planets.size(); j++) {
@@ -173,8 +178,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 if (clear) break;
             }
             p.x = p.baseX;
-            p.bandIn = p.r * 1.45f;
-            p.bandOut = p.r * (2.9f - Math.min(0.7f, lvl * 0.035f));
+            p.bandIn = p.r * 1.30f;
+            p.bandOut = p.r * (3.3f - Math.min(0.8f, lvl * 0.03f));
             p.needed = 1;
             if (lvl >= 5 && rng.nextInt(3) == 0) p.needed = 2;
             if (lvl >= 10 && rng.nextInt(4) == 0) p.needed = 3;
@@ -183,7 +188,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 p.oscSpeed = 0.5f + rng.nextFloat() * 0.4f;
                 p.oscPhase = rng.nextFloat() * TAU;
             }
-            p.hue = 180f + rng.nextFloat() * 160f; // teal..violet pastels
+            p.hue = rng.nextFloat() * 360f; // the whole rainbow is welcome
+            p.glow = planetGlow(p.hue, p.r, false);
             planets.add(p);
         }
 
@@ -206,7 +212,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             p.x = p.baseX;
             p.repulse = true;
             p.needed = 0;
-            p.hue = 0f;
+            p.hue = 340f;
+            p.glow = planetGlow(p.hue, p.r, true);
             planets.add(p);
         }
 
@@ -234,6 +241,27 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private static float dist(float x0, float y0, float x1, float y1) {
         float dx = x1 - x0, dy = y1 - y0;
         return (float) Math.sqrt(dx * dx + dy * dy);
+    }
+
+    private float mass(Planet p) {
+        return 0.075f * width * width * width
+                * (p.r / (0.08f * width)) * (p.r / (0.08f * width));
+    }
+
+    private Shader planetGlow(float hue, float r, boolean repulse) {
+        int core, mid;
+        if (repulse) {
+            core = 0xFFFF6E8C;
+            mid = 0xAAC22B55;
+        } else {
+            float[] h0 = {hue, 0.45f, 1f};
+            float[] h1 = {hue, 0.80f, 0.75f};
+            core = Color.HSVToColor(h0);
+            mid = (Color.HSVToColor(h1) & 0x00FFFFFF) | 0xBB000000;
+        }
+        return new RadialGradient(0, 0, r * 2.4f,
+                new int[]{core, mid, (mid & 0x00FFFFFF) | 0x33000000, 0x00000000},
+                new float[]{0f, 0.42f, 0.62f, 1f}, Shader.TileMode.CLAMP);
     }
 
     // --------------------------------------------------------------- update
@@ -299,9 +327,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             float minD = p.r * 0.9f;
             if (d2 < minD * minD) d2 = minD * minD;
             float d = (float) Math.sqrt(d2);
-            float m = 0.075f * width * width * width
-                    * (p.r / (0.08f * width)) * (p.r / (0.08f * width));
-            float a = m / d2 * (p.repulse ? -1.2f : 1f);
+            float a = mass(p) / d2 * (p.repulse ? -1.2f : 1f);
             ax += dx / d * a;
             ay += dy / d * a;
         }
@@ -309,6 +335,25 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         bvy += ay * dt;
         bx += bvx * dt;
         by += bvy * dt;
+
+        // the band cradles the comet: inside it, gravity gently rounds the
+        // path toward a circular orbit so capture is forgiving, not fussy
+        for (int i = 0; i < planets.size(); i++) {
+            Planet p = planets.get(i);
+            if (p.repulse || p.captured >= p.needed) continue;
+            float d = dist(bx, by, p.x, p.y);
+            if (d < p.bandIn || d > p.bandOut) continue;
+            float ux = (bx - p.x) / d, uy = (by - p.y) / d;
+            float vr = bvx * ux + bvy * uy;
+            float vtx = bvx - vr * ux, vty = bvy - vr * uy;
+            float vt = (float) Math.sqrt(vtx * vtx + vty * vty) + 0.001f;
+            float vCirc = (float) Math.sqrt(mass(p) / d);
+            vr *= (1f - 2.4f * dt);
+            float scale = 1f + (vCirc - vt) / vt * Math.min(1f, 1.6f * dt);
+            bvx = vtx * scale + vr * ux;
+            bvy = vty * scale + vr * uy;
+            break;
+        }
 
         for (int i = 0; i < planets.size(); i++) {
             Planet p = planets.get(i);
@@ -375,7 +420,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         capSweep += d;
         capLastTheta = theta;
 
-        if (Math.abs(capSweep) >= TAU) {
+        if (Math.abs(capSweep) >= CAPTURE_SWEEP) {
             captureMoon(p, inside);
         }
     }
@@ -543,22 +588,38 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawSky(Canvas c) {
-        c.drawColor(0xFF080916);
-        // drifting nebulas
+        c.drawColor(0xFF0A0A1E);
+        // drifting nebulas - violet, teal, magenta, gold
         drawNebula(c, nebulaA, width * (0.30f + 0.06f * (float) Math.sin(menuT * 0.11f)),
                 height * (0.25f + 0.04f * (float) Math.cos(menuT * 0.13f)));
         drawNebula(c, nebulaB, width * (0.75f + 0.05f * (float) Math.cos(menuT * 0.09f)),
                 height * (0.62f + 0.05f * (float) Math.sin(menuT * 0.07f)));
         drawNebula(c, nebulaC, width * (0.15f + 0.05f * (float) Math.sin(menuT * 0.08f + 2f)),
                 height * (0.85f + 0.03f * (float) Math.cos(menuT * 0.12f)));
+        drawNebula(c, nebulaD, width * (0.85f + 0.05f * (float) Math.sin(menuT * 0.06f + 4f)),
+                height * (0.10f + 0.04f * (float) Math.sin(menuT * 0.10f)));
 
+        // stars in warm and cool tints
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < 60; i++) {
             float sx = (i * 379f + 53f) % width;
             float sy = (i * 233f + 89f) % height;
             float tw = 0.5f + 0.5f * (float) Math.sin(menuT * (0.8f + i % 5 * 0.3f) + i);
-            paint.setColor(Color.argb((int) (14 + 38 * tw), 210, 220, 255));
-            c.drawCircle(sx, sy, Math.max(1.2f, width * 0.0013f) * (i % 3 == 0 ? 1.6f : 1f), paint);
+            int a = (int) (16 + 46 * tw);
+            int col;
+            switch (i % 4) {
+                case 0: col = Color.argb(a, 255, 220, 180); break;
+                case 1: col = Color.argb(a, 190, 215, 255); break;
+                case 2: col = Color.argb(a, 255, 190, 230); break;
+                default: col = Color.argb(a, 200, 255, 230);
+            }
+            paint.setColor(col);
+            float r = Math.max(1.2f, width * 0.0013f) * (i % 3 == 0 ? 1.8f : 1f);
+            c.drawCircle(sx, sy, r, paint);
+            if (i % 6 == 0) {
+                paint.setColor((col & 0x00FFFFFF) | ((a / 3) << 24));
+                c.drawCircle(sx, sy, r * 3f, paint);
+            }
         }
     }
 
@@ -576,95 +637,106 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private void drawPlanets(Canvas c) {
         for (int i = 0; i < planets.size(); i++) {
             Planet p = planets.get(i);
+            float[] bandHsv = {p.hue, 0.55f, 1f};
+            int bandCol = Color.HSVToColor(bandHsv);
 
             if (!p.repulse) {
-                // the capture band: a soft shimmering annulus
+                // the capture band: a soft shimmering annulus in the
+                // planet's own color
                 float mid = (p.bandIn + p.bandOut) / 2f;
                 float bw = p.bandOut - p.bandIn;
                 float shimmer = 0.75f + 0.25f * (float) Math.sin(menuT * 2f + i);
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(bw);
-                paint.setColor(Color.argb((int) (16 * shimmer + p.bloom * 50), 200, 215, 255));
-                c.drawCircle(p.x, p.y, mid, paint);
-                paint.setStrokeWidth(Math.max(1.5f, width * 0.0016f));
-                paint.setColor(Color.argb((int) (46 * shimmer), 200, 215, 255));
-                c.drawCircle(p.x, p.y, p.bandIn, paint);
-                c.drawCircle(p.x, p.y, p.bandOut, paint);
-                // slow fairy dust circling the band
-                paint.setStyle(Paint.Style.FILL);
-                for (int d = 0; d < 14; d++) {
-                    float a = menuT * 0.35f + d * TAU / 14f;
-                    float rr = mid + bw * 0.28f * (float) Math.sin(menuT * 0.8f + d * 2f);
-                    paint.setColor(Color.argb((int) (60 * shimmer), 220, 230, 255));
+                glowPaint.setStyle(Paint.Style.STROKE);
+                glowPaint.setMaskFilter(blurBig);
+                glowPaint.setStrokeWidth(bw);
+                glowPaint.setColor((bandCol & 0x00FFFFFF)
+                        | (((int) (22 * shimmer + p.bloom * 60)) << 24));
+                c.drawCircle(p.x, p.y, mid, glowPaint);
+                glowPaint.setMaskFilter(blurMed);
+                glowPaint.setStrokeWidth(width * 0.004f);
+                glowPaint.setColor((bandCol & 0x00FFFFFF)
+                        | (((int) (80 * shimmer)) << 24));
+                c.drawCircle(p.x, p.y, p.bandIn, glowPaint);
+                c.drawCircle(p.x, p.y, p.bandOut, glowPaint);
+                glowPaint.setMaskFilter(null);
+                // fairy dust circling the band
+                glowPaint.setStyle(Paint.Style.FILL);
+                glowPaint.setMaskFilter(blurSmall);
+                for (int d = 0; d < 16; d++) {
+                    float a = menuT * 0.35f + d * TAU / 16f;
+                    float rr = mid + bw * 0.30f * (float) Math.sin(menuT * 0.8f + d * 2f);
+                    float[] dustHsv = {(p.hue + d * 12f) % 360f, 0.4f, 1f};
+                    glowPaint.setColor((Color.HSVToColor(dustHsv) & 0x00FFFFFF)
+                            | (((int) (90 * shimmer)) << 24));
                     c.drawCircle(p.x + (float) Math.cos(a) * rr,
-                            p.y + (float) Math.sin(a) * rr, width * 0.0022f, paint);
+                            p.y + (float) Math.sin(a) * rr, width * 0.003f, glowPaint);
                 }
+                glowPaint.setMaskFilter(null);
             }
 
-            // body
-            float[] hsv = {p.hue, 0.40f, 0.55f};
-            int body = p.repulse ? 0xFF7A2D3E : Color.HSVToColor(hsv);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor((body & 0x00FFFFFF) | 0x2E000000);
-            c.drawCircle(p.x, p.y, p.r * 1.5f + p.bloom * p.r * 0.6f, paint);
-            paint.setColor(body);
-            c.drawCircle(p.x, p.y, p.r, paint);
-            paint.setColor(0x30000000);
-            c.drawCircle(p.x + p.r * 0.25f, p.y + p.r * 0.22f, p.r * 0.82f, paint);
-            float[] hsv2 = {p.hue, 0.5f, 0.95f};
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(width * 0.0035f);
-            paint.setColor(p.repulse ? 0xAAFF5D75
-                    : ((Color.HSVToColor(hsv2) & 0x00FFFFFF) | 0x77000000));
-            c.drawCircle(p.x, p.y, p.r, paint);
-            if (p.repulse) {
-                paint.setStrokeWidth(width * 0.005f);
-                c.drawLine(p.x - p.r * 0.45f, p.y, p.x + p.r * 0.45f, p.y, paint);
-            }
-
-            // moon requirement pips
-            if (p.needed > 0) {
+            // body: pure gradient orb, no outlines
+            if (p.glow != null) {
+                c.save();
+                c.translate(p.x, p.y);
+                paint.setShader(p.glow);
                 paint.setStyle(Paint.Style.FILL);
-                float px0 = p.x - (p.needed - 1) * width * 0.016f;
+                float bloomK = 1f + p.bloom * 0.25f;
+                c.drawCircle(0, 0, p.r * 2.4f * bloomK, paint);
+                paint.setShader(null);
+                c.restore();
+            }
+            if (p.repulse) {
+                glowPaint.setStyle(Paint.Style.STROKE);
+                glowPaint.setMaskFilter(blurSmall);
+                glowPaint.setStrokeWidth(width * 0.006f);
+                glowPaint.setColor(0xCCFFAFC2);
+                c.drawLine(p.x - p.r * 0.45f, p.y, p.x + p.r * 0.45f, p.y, glowPaint);
+                glowPaint.setMaskFilter(null);
+            }
+
+            // moon requirement pips: little sleeping lights
+            if (p.needed > 0) {
+                glowPaint.setStyle(Paint.Style.FILL);
+                glowPaint.setMaskFilter(blurSmall);
+                float px0 = p.x - (p.needed - 1) * width * 0.018f;
                 for (int k = 0; k < p.needed; k++) {
-                    if (k < p.captured) {
-                        paint.setColor(0xFFFFE6A0);
-                        c.drawCircle(px0 + k * width * 0.032f, p.y, width * 0.008f, paint);
-                    } else {
-                        paint.setStyle(Paint.Style.STROKE);
-                        paint.setStrokeWidth(width * 0.0025f);
-                        paint.setColor(0xAAFFFFFF);
-                        c.drawCircle(px0 + k * width * 0.032f, p.y, width * 0.008f, paint);
-                        paint.setStyle(Paint.Style.FILL);
-                    }
+                    boolean got = k < p.captured;
+                    glowPaint.setColor(got ? 0xFFFFE6A0 : 0x66FFFFFF);
+                    c.drawCircle(px0 + k * width * 0.036f, p.y,
+                            width * (got ? 0.010f : 0.007f), glowPaint);
                 }
+                glowPaint.setMaskFilter(null);
             }
         }
     }
 
     private void drawMoons(Canvas c) {
-        paint.setStyle(Paint.Style.FILL);
+        glowPaint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < moons.size(); i++) {
             Moon m = moons.get(i);
             Planet p = planets.get(m.planet);
             float mx = p.x + (float) Math.cos(m.angle) * m.radius;
             float my = p.y + (float) Math.sin(m.angle) * m.radius;
 
-            // sleepy trail
-            for (int s = 1; s <= 7; s++) {
-                float a = m.angle - Math.signum(m.omega) * s * 0.09f;
+            // sleepy luminous trail
+            glowPaint.setMaskFilter(blurSmall);
+            for (int s = 1; s <= 9; s++) {
+                float a = m.angle - Math.signum(m.omega) * s * 0.085f;
                 float tx = p.x + (float) Math.cos(a) * m.radius;
                 float ty = p.y + (float) Math.sin(a) * m.radius;
-                paint.setColor(moonColor(m, 0.10f * (1f - s / 8f)));
-                c.drawCircle(tx, ty, ballR * (1f - s * 0.1f), paint);
+                glowPaint.setColor(moonColor(m, 0.13f * (1f - s / 10f)));
+                c.drawCircle(tx, ty, ballR * 1.2f * (1f - s * 0.08f), glowPaint);
             }
             float pulse = 1f + 0.1f * (float) Math.sin(menuT * 2.4f + i);
-            paint.setColor(moonColor(m, 0.22f));
-            c.drawCircle(mx, my, ballR * 2.6f * pulse, paint);
-            paint.setColor(moonColor(m, 1f));
-            c.drawCircle(mx, my, ballR * 1.1f, paint);
-            paint.setColor(0xAAFFFFFF);
-            c.drawCircle(mx - ballR * 0.3f, my - ballR * 0.3f, ballR * 0.35f, paint);
+            glowPaint.setMaskFilter(blurMed);
+            glowPaint.setColor(moonColor(m, 0.45f));
+            c.drawCircle(mx, my, ballR * 3.2f * pulse, glowPaint);
+            glowPaint.setMaskFilter(blurSmall);
+            glowPaint.setColor(moonColor(m, 1f));
+            c.drawCircle(mx, my, ballR * 1.3f, glowPaint);
+            glowPaint.setColor(0xCCFFFFFF);
+            c.drawCircle(mx, my, ballR * 0.55f, glowPaint);
+            glowPaint.setMaskFilter(null);
         }
     }
 
@@ -674,13 +746,16 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         arcRect.set(p.x - r, p.y - r, p.x + r, p.y + r);
         float sweepDeg = capSweep * 360f / TAU;
         float startDeg = (capLastTheta * 360f / TAU) - sweepDeg;
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(width * 0.006f);
-        paint.setColor(0xCCFFE6A0);
-        c.drawArc(arcRect, startDeg, sweepDeg, false, paint);
-        paint.setStrokeWidth(width * 0.014f);
-        paint.setColor(0x33FFE6A0);
-        c.drawArc(arcRect, startDeg, sweepDeg, false, paint);
+        glowPaint.setStyle(Paint.Style.STROKE);
+        glowPaint.setMaskFilter(blurMed);
+        glowPaint.setStrokeWidth(width * 0.020f);
+        glowPaint.setColor(0x55FFE6A0);
+        c.drawArc(arcRect, startDeg, sweepDeg, false, glowPaint);
+        glowPaint.setMaskFilter(blurSmall);
+        glowPaint.setStrokeWidth(width * 0.006f);
+        glowPaint.setColor(0xEEFFE6A0);
+        c.drawArc(arcRect, startDeg, sweepDeg, false, glowPaint);
+        glowPaint.setMaskFilter(null);
 
         // progress whisper near the planet
         float k = Math.min(1f, Math.abs(capSweep) / TAU);
@@ -719,9 +794,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 float minD = p.r * 0.9f;
                 if (d2 < minD * minD) d2 = minD * minD;
                 float d = (float) Math.sqrt(d2);
-                float m = 0.075f * width * width * width
-                        * (p.r / (0.08f * width)) * (p.r / (0.08f * width));
-                float a = m / d2 * (p.repulse ? -1.2f : 1f);
+                float a = mass(p) / d2 * (p.repulse ? -1.2f : 1f);
                 ax += dx / d * a;
                 ay += dy / d * a;
             }
@@ -754,20 +827,30 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawComet(Canvas c) {
-        paint.setStyle(Paint.Style.FILL);
+        glowPaint.setStyle(Paint.Style.FILL);
         if (flying) {
+            glowPaint.setMaskFilter(blurSmall);
             for (int s = 0; s < trailX.length; s++) {
                 int idx = (trailHead - s + trailX.length * 2) % trailX.length;
                 float k = 1f - s / (float) trailX.length;
-                paint.setColor(Color.argb((int) (60f * k), 230, 240, 255));
-                c.drawCircle(trailX[idx], trailY[idx], ballR * (0.25f + 0.65f * k), paint);
+                // the tail shifts from white-hot to violet as it fades
+                int col = Color.argb((int) (80f * k),
+                        (int) (180 + 75 * k), (int) (160 + 95 * k), 255);
+                glowPaint.setColor(col);
+                c.drawCircle(trailX[idx], trailY[idx], ballR * (0.3f + 0.9f * k), glowPaint);
             }
         }
         float breathe = 1f + 0.06f * (float) Math.sin(menuT * 3f);
-        paint.setColor(0x36E8FBFF);
-        c.drawCircle(bx, by, ballR * 2.6f * breathe, paint);
-        paint.setColor(0xFFF4FBFF);
-        c.drawCircle(bx, by, ballR, paint);
+        glowPaint.setMaskFilter(blurBig);
+        glowPaint.setColor(0x4480C8FF);
+        c.drawCircle(bx, by, ballR * 4.2f * breathe, glowPaint);
+        glowPaint.setMaskFilter(blurMed);
+        glowPaint.setColor(0x66BFE8FF);
+        c.drawCircle(bx, by, ballR * 2.4f * breathe, glowPaint);
+        glowPaint.setMaskFilter(blurSmall);
+        glowPaint.setColor(0xFFF4FBFF);
+        c.drawCircle(bx, by, ballR, glowPaint);
+        glowPaint.setMaskFilter(null);
     }
 
     private void drawParticles(Canvas c) {
@@ -775,7 +858,10 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         for (int i = 0; i < particles.size(); i++) {
             Particle p = particles.get(i);
             float k = p.life / p.maxLife;
-            paint.setColor((p.color & 0x00FFFFFF) | (((int) (k * 200f)) << 24));
+            // halo + core, soft without a mask filter (cheap for many dots)
+            paint.setColor((p.color & 0x00FFFFFF) | (((int) (k * 70f)) << 24));
+            c.drawCircle(p.x, p.y, p.size * 2.4f * (0.4f + 0.6f * k), paint);
+            paint.setColor((p.color & 0x00FFFFFF) | (((int) (k * 210f)) << 24));
             c.drawCircle(p.x, p.y, p.size * (0.4f + 0.6f * k), paint);
         }
     }
@@ -820,24 +906,31 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawMenu(Canvas c) {
-        // a sleeping system: planet, band, one moon circling
+        // a sleeping system: glowing planet, tinted band, one golden moon
         float pcx = width / 2f, pcy = height * 0.52f, pr = width * 0.085f;
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(pr * 1.1f);
-        paint.setColor(0x14C8D7FF);
-        c.drawCircle(pcx, pcy, pr * 2.1f, paint);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF3C4E80);
-        c.drawCircle(pcx, pcy, pr, paint);
-        paint.setColor(0x30000000);
-        c.drawCircle(pcx + pr * 0.25f, pcy + pr * 0.22f, pr * 0.8f, paint);
+        glowPaint.setStyle(Paint.Style.STROKE);
+        glowPaint.setMaskFilter(blurBig);
+        glowPaint.setStrokeWidth(pr * 1.1f);
+        glowPaint.setColor(0x2270C8FF);
+        c.drawCircle(pcx, pcy, pr * 2.1f, glowPaint);
+        glowPaint.setMaskFilter(null);
+        glowPaint.setStyle(Paint.Style.FILL);
+        glowPaint.setMaskFilter(blurMed);
+        glowPaint.setColor(0x664A6AE0);
+        c.drawCircle(pcx, pcy, pr * 1.5f, glowPaint);
+        glowPaint.setColor(0xFF5A74C8);
+        c.drawCircle(pcx, pcy, pr, glowPaint);
+        glowPaint.setMaskFilter(null);
         float ma = menuT * 0.9f;
         float mx = pcx + (float) Math.cos(ma) * pr * 2.1f;
         float my = pcy + (float) Math.sin(ma) * pr * 2.1f;
-        paint.setColor(0x33FFE6A0);
-        c.drawCircle(mx, my, ballR * 2.6f, paint);
-        paint.setColor(0xFFFFE6A0);
-        c.drawCircle(mx, my, ballR * 1.1f, paint);
+        glowPaint.setMaskFilter(blurMed);
+        glowPaint.setColor(0x55FFE6A0);
+        c.drawCircle(mx, my, ballR * 3.2f, glowPaint);
+        glowPaint.setMaskFilter(blurSmall);
+        glowPaint.setColor(0xFFFFE6A0);
+        c.drawCircle(mx, my, ballR * 1.2f, glowPaint);
+        glowPaint.setMaskFilter(null);
 
         textPaint.setColor(Color.WHITE);
         textPaint.setTextSize(width * 0.16f);
@@ -966,14 +1059,24 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             height = hpx;
             ballR = w * 0.013f;
             nebulaA = new RadialGradient(0, 0, w * 0.85f,
-                    new int[]{0x2C4A3A8C, 0x14283060, 0x00000000},
+                    new int[]{0x4456409C, 0x22303878, 0x00000000},
                     new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
             nebulaB = new RadialGradient(0, 0, w * 0.75f,
-                    new int[]{0x261E6E78, 0x10204050, 0x00000000},
+                    new int[]{0x3C20888C, 0x18205868, 0x00000000},
                     new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
             nebulaC = new RadialGradient(0, 0, w * 0.65f,
-                    new int[]{0x22703A78, 0x10302050, 0x00000000},
+                    new int[]{0x38883A80, 0x16402458, 0x00000000},
                     new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
+            nebulaD = new RadialGradient(0, 0, w * 0.6f,
+                    new int[]{0x2E946A30, 0x14583820, 0x00000000},
+                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
+            blurSmall = new BlurMaskFilter(w * 0.008f, BlurMaskFilter.Blur.NORMAL);
+            blurMed = new BlurMaskFilter(w * 0.022f, BlurMaskFilter.Blur.NORMAL);
+            blurBig = new BlurMaskFilter(w * 0.05f, BlurMaskFilter.Blur.NORMAL);
+            for (int i = 0; i < planets.size(); i++) {
+                Planet p = planets.get(i);
+                p.glow = planetGlow(p.hue, p.r, p.repulse);
+            }
             if (changed && state != STATE_MENU) {
                 buildLevel(level);
             }
