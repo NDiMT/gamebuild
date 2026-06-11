@@ -39,57 +39,45 @@ def sample(u, v):
     base = 0.10 + 0.07 * max(0.0, 1.0 - d * 1.2)
     cr, cg, cb = base * 0.55, base * 0.75, base * 1.6
 
-    ground = 0.42
+    # a swarm of fireflies sweeping in a comet curve
+    fireflies = [
+        (-0.42, 0.30, 0.050), (-0.30, 0.12, 0.060), (-0.16, -0.02, 0.065),
+        (-0.02, -0.14, 0.075), (0.14, -0.22, 0.085), (0.32, -0.26, 0.100),
+        (-0.34, 0.34, 0.040), (-0.20, 0.20, 0.045), (-0.06, 0.06, 0.050),
+        (0.10, -0.04, 0.055), (0.26, -0.10, 0.050), (0.05, -0.30, 0.045),
+        (0.42, -0.40, 0.060), (-0.10, -0.26, 0.040),
+    ]
+    for fx, fy, fr in fireflies:
+        d2 = math.hypot(u - fx, v - fy)
+        glow = math.exp(-((d2 / (fr * 3.2)) ** 2)) * 0.55
+        cr += 1.00 * glow
+        cg += 0.92 * glow
+        cb += 0.45 * glow
+        if d2 < fr:
+            cr, cg, cb = 1.0, 0.97, 0.82
 
-    # neon ground line + glow
-    gd = abs(v - ground)
-    glow = math.exp(-(gd / 0.14) ** 2) * 0.5
-    cg += 0.85 * glow
-    cb += 1.00 * glow
-    if gd < 0.035 :
-        cr, cg, cb = 0.25, 0.95, 1.0
-
-    # perspective grid under the ground line
-    if v > ground + 0.03:
-        depth = (v - ground) / (1.0 - ground)
-        gx = u / (0.35 + 0.65 * depth)
-        if abs((gx * 3.0 + 0.5) % 1.0 - 0.5) < 0.045:
-            cg += 0.35
-            cb += 0.4
-
-    # the running cube (slightly tilted, mid-jump) with trail
-    cxp, cyp = 0.10, ground - 0.34
-    ca, sa = math.cos(math.radians(14)), math.sin(math.radians(14))
-    ru = (u - cxp) * ca - (v - cyp) * sa
-    rv = (u - cxp) * sa + (v - cyp) * ca
-    half = 0.21
-    bd = max(abs(ru), abs(rv))
-    bglow = math.exp(-(max(0.0, bd - half) / 0.12) ** 2) * 0.8
-    cr += 1.0 * bglow
-    cg += 0.85 * bglow
-    cb += 0.95 * bglow
-    if bd < half:
-        cr, cg, cb = 1.0, 1.0, 1.0
-        # eyes
-        if (math.hypot(ru - 0.08, rv + 0.05) < 0.035
-                or math.hypot(ru + 0.01, rv + 0.05) < 0.035):
-            cr, cg, cb = 0.06, 0.07, 0.11
-    # speed trail to the left of the cube
-    for i in range(1, 4):
-        tx = cxp - i * 0.16
-        td = max(abs((u - tx) * ca - (v - cyp) * sa), abs((u - tx) * sa + (v - cyp) * ca))
-        if td < half * (1.0 - i * 0.18):
-            fade = 0.5 / i
-            cr += fade
-            cg += fade * 0.9
-            cb += fade
-
-    # red spike on the ground, right side
-    spx = 0.52
-    if v <= ground and v > ground - 0.30:
-        hwid = 0.16 * (1.0 - (ground - v) / 0.30)
-        if abs(u - spx) < hwid:
+    # red obstacle slab on the right edge
+    if 0.62 < u < 0.84 and -0.9 < v < 0.45:
+        cr, cg, cb = 0.16, 0.10, 0.20
+        if u < 0.66 or u > 0.80 or v < -0.86 or v > 0.41:
             cr, cg, cb = 1.0, 0.24, 0.35
+    else:
+        sd = max(0.62 - u, u - 0.84, -0.9 - v, v - 0.45)
+        if sd < 0.10:
+            k = math.exp(-((sd / 0.07) ** 2)) * 0.35
+            cr += k
+            cg += k * 0.2
+            cb += k * 0.25
+
+    # cyan orb bottom-left
+    od = math.hypot(u + 0.45, v + 0.52)
+    oglow = math.exp(-((od / 0.16) ** 2)) * 0.6
+    cg += 0.8 * oglow
+    cb += 1.0 * oglow
+    if 0.055 < od < 0.085:
+        cr, cg, cb = 0.25, 0.90, 1.0
+    elif od < 0.035:
+        cr, cg, cb = 0.25, 0.90, 1.0
 
     aa = min(1.0, -plate / 0.02)  # soft edge on the plate
     return (min(cr, 1.0), min(cg, 1.0), min(cb, 1.0), aa)

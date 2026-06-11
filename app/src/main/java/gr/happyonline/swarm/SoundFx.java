@@ -1,4 +1,4 @@
-package gr.happyonline.rush;
+package gr.happyonline.swarm;
 
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -12,33 +12,35 @@ import java.util.Random;
  */
 public class SoundFx {
 
-    public static final int JUMP = 0;
-    public static final int JUMP2 = 1;
-    public static final int DEATH = 2;
-    public static final int CLOSE = 3;
-    public static final int START = 4;
-    public static final int NEW_BEST = 5;
-    public static final int SPEED = 6;
-    public static final int COIN_0 = 7; // ..COIN_0 + 7, cycling pitches
+    public static final int START = 0;
+    public static final int OVER = 1;
+    public static final int POP = 2;
+    public static final int LEVEL = 3;
+    public static final int NEW_BEST = 4;
+    public static final int ORB_0 = 5;      // ..ORB_0 + 7, rising chimes
+    public static final int PERFECT_0 = 13; // ..PERFECT_0 + 5, rising two-tone
 
     private static final int RATE = 44100;
 
-    private final AudioTrack[] tracks = new AudioTrack[15];
+    private final AudioTrack[] tracks = new AudioTrack[19];
 
     public SoundFx() {
         try {
-            tracks[JUMP] = make(sweep(420f, 760f, 0.09f, 0.35f));
-            tracks[JUMP2] = make(sweep(560f, 1050f, 0.09f, 0.35f));
-            tracks[DEATH] = make(noise(0.4f, 0.5f));
-            tracks[CLOSE] = make(concat(sine(880f, 0.06f, 0.4f), sine(1320f, 0.09f, 0.4f)));
             tracks[START] = make(sweep(330f, 880f, 0.18f, 0.35f));
+            tracks[OVER] = make(noise(0.45f, 0.5f));
+            tracks[POP] = make(pop());
+            tracks[LEVEL] = make(sweep(440f, 1760f, 0.22f, 0.4f));
             tracks[NEW_BEST] = make(concat(sine(660f, 0.09f, 0.45f),
                     sine(831f, 0.09f, 0.45f), sine(988f, 0.16f, 0.45f)));
-            tracks[SPEED] = make(sweep(440f, 1760f, 0.22f, 0.4f));
-            // pentatonic-ish ladder so coin streaks literally sound like climbing
+            // pentatonic-ish ladder so orb streaks literally sound like climbing
             float[] steps = {523f, 587f, 659f, 784f, 880f, 1047f, 1175f, 1319f};
             for (int i = 0; i < 8; i++) {
-                tracks[COIN_0 + i] = make(sine(steps[i], 0.09f, 0.4f));
+                tracks[ORB_0 + i] = make(sine(steps[i], 0.10f, 0.4f));
+            }
+            for (int i = 0; i < 6; i++) {
+                float base = 660f * (float) Math.pow(1.122f, i);
+                tracks[PERFECT_0 + i] = make(concat(
+                        sine(base, 0.06f, 0.4f), sine(base * 1.5f, 0.10f, 0.4f)));
             }
         } catch (Exception ignored) {
             // no audio is better than no game
@@ -86,6 +88,21 @@ public class SoundFx {
         for (int i = 0; i < n; i++) {
             double env = Math.exp(-4.0 * i / n) * Math.min(1.0, i / (RATE * 0.004));
             out[i] = (short) (Math.sin(2 * Math.PI * freq * i / RATE) * env * vol * 32767);
+        }
+        return out;
+    }
+
+    /** Short downward chirp: the sound of one firefly winking out. */
+    private static short[] pop() {
+        int n = (int) (RATE * 0.07f);
+        short[] out = new short[n];
+        double phase = 0;
+        for (int i = 0; i < n; i++) {
+            double k = (double) i / n;
+            double f = 900 - 500 * k;
+            phase += 2 * Math.PI * f / RATE;
+            double env = Math.exp(-7.0 * k);
+            out[i] = (short) (Math.sin(phase) * env * 0.4 * 32767);
         }
         return out;
     }

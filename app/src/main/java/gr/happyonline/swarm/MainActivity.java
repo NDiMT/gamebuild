@@ -1,4 +1,4 @@
-package gr.happyonline.rush;
+package gr.happyonline.swarm;
 
 import android.app.Activity;
 import android.os.Bundle;

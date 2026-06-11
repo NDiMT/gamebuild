@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'gr.happyonline.rush'
+    namespace 'gr.happyonline.swarm'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'gr.happyonline.rush'
+        applicationId 'gr.happyonline.swarm'
         minSdk 21
         targetSdk 34
         versionCode 1
