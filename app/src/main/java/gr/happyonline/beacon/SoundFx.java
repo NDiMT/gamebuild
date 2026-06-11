@@ -1,4 +1,4 @@
-package gr.happyonline.echo;
+package gr.happyonline.beacon;
 
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -14,10 +14,10 @@ public class SoundFx {
 
     public static final int START = 0;
     public static final int OVER = 1;
-    public static final int CLEAR = 2;
-    public static final int NEW_BEST = 3;
-    public static final int GRAZE = 4;
-    public static final int ORB_0 = 5; // ..ORB_0 + 7, rising chimes
+    public static final int HIT = 2;
+    public static final int NIGHT = 3;
+    public static final int NEW_BEST = 4;
+    public static final int KILL_0 = 5; // ..KILL_0 + 7, rising with the combo
 
     private static final int RATE = 44100;
 
@@ -26,16 +26,15 @@ public class SoundFx {
     public SoundFx() {
         try {
             tracks[START] = make(sweep(330f, 880f, 0.18f, 0.35f));
-            tracks[OVER] = make(noise(0.45f, 0.5f));
-            tracks[CLEAR] = make(concat(sine(523f, 0.08f, 0.45f),
-                    sine(659f, 0.08f, 0.45f), sine(784f, 0.14f, 0.45f)));
+            tracks[OVER] = make(noise(0.5f, 0.5f));
+            tracks[HIT] = make(thud());
+            tracks[NIGHT] = make(sweep(440f, 1760f, 0.22f, 0.4f));
             tracks[NEW_BEST] = make(concat(sine(660f, 0.09f, 0.45f),
                     sine(831f, 0.09f, 0.45f), sine(988f, 0.16f, 0.45f)));
-            tracks[GRAZE] = make(sine(1568f, 0.05f, 0.22f));
-            // pentatonic-ish ladder so each round's orbs sound like climbing
+            // pentatonic-ish ladder so kill streaks literally sound like climbing
             float[] steps = {523f, 587f, 659f, 784f, 880f, 1047f, 1175f, 1319f};
             for (int i = 0; i < 8; i++) {
-                tracks[ORB_0 + i] = make(sine(steps[i], 0.10f, 0.4f));
+                tracks[KILL_0 + i] = make(sine(steps[i], 0.10f, 0.4f));
             }
         } catch (Exception ignored) {
             // no audio is better than no game
@@ -83,6 +82,21 @@ public class SoundFx {
         for (int i = 0; i < n; i++) {
             double env = Math.exp(-4.0 * i / n) * Math.min(1.0, i / (RATE * 0.004));
             out[i] = (short) (Math.sin(2 * Math.PI * freq * i / RATE) * env * vol * 32767);
+        }
+        return out;
+    }
+
+    /** Low punchy thump for taking a hit at the core. */
+    private static short[] thud() {
+        int n = (int) (RATE * 0.22f);
+        short[] out = new short[n];
+        double phase = 0;
+        for (int i = 0; i < n; i++) {
+            double k = (double) i / n;
+            double f = 160 - 90 * k;
+            phase += 2 * Math.PI * f / RATE;
+            double env = Math.exp(-5.0 * k);
+            out[i] = (short) (Math.sin(phase) * env * 0.55 * 32767);
         }
         return out;
     }

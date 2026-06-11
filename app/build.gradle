@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'gr.happyonline.echo'
+    namespace 'gr.happyonline.beacon'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'gr.happyonline.echo'
+        applicationId 'gr.happyonline.beacon'
         minSdk 21
         targetSdk 34
         versionCode 1

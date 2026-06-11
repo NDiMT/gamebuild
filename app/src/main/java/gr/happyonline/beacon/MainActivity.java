@@ -1,4 +1,4 @@
-package gr.happyonline.echo;
+package gr.happyonline.beacon;
 
 import android.app.Activity;
 import android.os.Bundle;

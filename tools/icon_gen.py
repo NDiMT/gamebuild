@@ -39,53 +39,49 @@ def sample(u, v):
     base = 0.10 + 0.07 * max(0.0, 1.0 - d * 1.2)
     cr, cg, cb = base * 0.55, base * 0.75, base * 1.6
 
-    # ECHO: a white dot pursued by colored ghosts of itself along a loop
-    def loop_pos(t):
-        return (0.36 * math.cos(t), -0.36 * math.sin(t * 1.4) - 0.05)
+    # BEACON: a warm core at center, one beam of light, shadows with eyes
+    bd = math.hypot(u, v)
 
-    ghosts = [
-        (2.4, (0.25, 0.95, 1.0)),   # cyan
-        (3.3, (1.0, 0.35, 0.85)),   # magenta
-        (4.2, (1.0, 0.78, 0.25)),   # amber
-    ]
-    # ghost breadcrumb trails
-    for t0, (gr_, gg_, gb_) in ghosts:
-        for s in range(6):
-            tx, ty = loop_pos(t0 - s * 0.18)
-            td = math.hypot(u - tx, v - ty)
-            rr = 0.045 * (1.0 - s * 0.13)
-            if td < rr:
-                fade = 0.8 - s * 0.12
-                cr += gr_ * fade
-                cg += gg_ * fade
-                cb += gb_ * fade
-        gx, gy = loop_pos(t0)
-        gd = math.hypot(u - gx, v - gy)
-        glow = math.exp(-((gd / 0.13) ** 2)) * 0.5
-        cr += gr_ * glow
-        cg += gg_ * glow
-        cb += gb_ * glow
-        if gd < 0.07:
-            cr, cg, cb = gr_, gg_, gb_
+    # beam pointing up-right
+    beam_dir = math.radians(-38)
+    ang = math.atan2(v, u)
+    adiff = abs((ang - beam_dir + math.pi) % (2 * math.pi) - math.pi)
+    if bd > 0.04:
+        beam = math.exp(-((adiff / 0.30) ** 2)) * max(0.0, 1.0 - bd * 0.35)
+        cr += 1.00 * beam * 0.85
+        cg += 0.85 * beam * 0.85
+        cb += 0.45 * beam * 0.85
 
-    # the player: bright white, one step ahead
-    pxp, pyp = loop_pos(1.5)
-    pd = math.hypot(u - pxp, v - pyp)
-    pglow = math.exp(-((pd / 0.18) ** 2)) * 0.85
-    cr += pglow
-    cg += pglow
-    cb += pglow
-    if pd < 0.085:
-        cr, cg, cb = 1.0, 1.0, 1.0
+    # glowing core
+    cglow = math.exp(-((bd / 0.22) ** 2)) * 0.9
+    cr += cglow
+    cg += cglow * 0.92
+    cb += cglow * 0.75
+    if bd < 0.10:
+        cr, cg, cb = 1.0, 0.96, 0.82
 
-    # golden orb top-right
-    od = math.hypot(u - 0.52, v + 0.52)
-    oglow = math.exp(-((od / 0.14) ** 2)) * 0.55
-    cr += 1.0 * oglow
-    cg += 0.85 * oglow
-    cb += 0.3 * oglow
-    if od < 0.05:
-        cr, cg, cb = 1.0, 0.88, 0.5
+    # shadows lurking in the dark (eyes glinting), one caught in the beam
+    shadows = [(-0.52, 0.42, 0.14, False), (-0.30, -0.52, 0.11, False),
+               (0.58, -0.40, 0.13, True)]
+    for sxp, syp, sr, in_beam in shadows:
+        sd = math.hypot(u - sxp, v - syp)
+        if sd < sr:
+            if in_beam:
+                cr, cg, cb = 0.24, 0.21, 0.32
+            else:
+                cr, cg, cb = 0.07, 0.08, 0.15
+        elif in_beam and sd < sr * 1.25:
+            cr, cg, cb = 1.0, 0.82, 0.45  # hot rim
+        # eyes face the light
+        la = math.atan2(-syp, -sxp)
+        for side in (-1, 1):
+            exp_ = sxp + math.cos(la) * sr * 0.35 + math.cos(la + math.pi / 2) * sr * 0.38 * side
+            eyp = syp + math.sin(la) * sr * 0.35 + math.sin(la + math.pi / 2) * sr * 0.38 * side
+            if math.hypot(u - exp_, v - eyp) < sr * 0.16:
+                if in_beam:
+                    cr, cg, cb = 1.0, 0.91, 0.66
+                else:
+                    cr, cg, cb = 0.56, 0.66, 1.0
 
     aa = min(1.0, -plate / 0.02)  # soft edge on the plate
     return (min(cr, 1.0), min(cg, 1.0), min(cb, 1.0), aa)

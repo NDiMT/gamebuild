@@ -1,34 +1,33 @@
-# ECHO
+# BEACON
 
-Ένα πρωτότυπο arcade παιχνίδι για Android με έναν μοναδικό μηχανισμό:
-**ο μόνος εχθρός είσαι εσύ ο ίδιος**. Κάθε γύρο που καθαρίζεις, η ακριβής
-διαδρομή που μόλις πέταξες ηχογραφείται και ξαναπαίζει για πάντα ως
-«echo» — ένα φάντασμα του εαυτού σου που κινείται ακριβώς όπως κινήθηκες.
+Ένα πρωτότυπο arcade παιχνίδι για Android: είσαι **ένας φάρος στο σκοτάδι**
+και οι σκιές που σε ζυγώνουν **κινούνται μόνο όταν δεν τις κοιτάει το φως**
+(weeping angels mechanic). Μία δέσμη, πολλοί εχθροί από όλες τις
+κατευθύνσεις — διαλέγεις ποιος καίγεται και ποιος έρπει πιο κοντά.
 
 ## Gameplay
 
-- **Σύρε** το δάχτυλο για να γλιστράς στην αρένα (relative drag — η
-  κουκκίδα δεν κρύβεται κάτω από το δάχτυλο).
-- Μάζεψε **5 orbs** για να καθαρίσεις τον γύρο (+5×γύρος bonus).
-- Με κάθε γύρο, **η διαδρομή σου γίνεται φάντασμα** που επαναλαμβάνεται σε
-  loop. Στον γύρο 6 αποφεύγεις 5 παλιούς εαυτούς σου ταυτόχρονα.
-- Αν σε αγγίξει echo — τέλος. *Παίξε καθαρά τώρα, για να ζήσεις αργότερα*:
-  άτσαλες κινήσεις σήμερα = κόλαση αύριο. Το camping τιμωρείται (το echo
-  σου θα «κάθεται» εκεί για πάντα).
-- **Graze bonus**: πέρνα ξυστά από ένα echo χωρίς να το αγγίξεις και
-  μαζεύεις +1 πόντους συνεχόμενα — ρίσκο εναντίον ασφάλειας.
-- Σύντομο invulnerability στην αρχή κάθε γύρου. Best score, ζωές και
-  συνολικά echoes αποθηκεύονται τοπικά.
+- **Άγγιξε / σύρε** για να στρέψεις τη δέσμη του φάρου προς το δάχτυλό σου.
+  Όσο δεν αγγίζεις, ΟΛΕΣ οι σκιές προχωρούν.
+- Σκιά μέσα στη δέσμη = **παγώνει και καίγεται** (κάθε τύπος θέλει
+  διαφορετικό χρόνο). Σκιά στο σκοτάδι = πλησιάζει τον πυρήνα σου.
+- Τύποι: **wisps** (γρήγορα, εύκαιγα), **brutes** (αργά τανκς),
+  **shades** (σπιράλ πορεία, night 3+), **flickers** (κινούνται με
+  ξεσπάσματα, night 5+). Clusters και pincer attacks από αντίθετες πλευρές.
+- **Combo**: συνεχόμενα kills μέσα σε 1.6" ανεβάζουν πολλαπλασιαστή x2…x8.
+- Έχεις **3 καρδιές** — σκιά που φτάνει στον πυρήνα κοστίζει μία.
+- Κάθε 15" αλλάζει η **NIGHT**: περισσότερες, γρηγορότερες σκιές.
+  Best score, νύχτες και συνολικά kills αποθηκεύονται τοπικά.
 
 Όλα τα γραφικά είναι procedural (Canvas/SurfaceView) και όλοι οι ήχοι
-συντίθενται σε PCM κατά την εκκίνηση — το APK δεν περιέχει κανένα asset,
-γι' αυτό είναι ~66 KB.
+συντίθενται σε PCM κατά την εκκίνηση — κανένα asset, ~66 KB APK.
 
 ## Έτοιμα APKs
 
 | Παιχνίδι | Αρχείο | Περιγραφή |
 |---|---|---|
-| **ECHO** | [`dist/ECHO.apk`](dist/ECHO.apk) | Αποφεύγεις replays του εαυτού σου (τρέχων κώδικας στο `app/`) |
+| **BEACON** | [`dist/BEACON.apk`](dist/BEACON.apk) | Οι σκιές κινούνται μόνο στο σκοτάδι (τρέχων κώδικας στο `app/`) |
+| **ECHO** | [`dist/ECHO.apk`](dist/ECHO.apk) | Αποφεύγεις looping replays του εαυτού σου |
 | **SWARM** | [`dist/SWARM.apk`](dist/SWARM.apk) | Οδηγείς σμήνος πυγολαμπίδων με flocking AI |
 
 Όλα υπογεγραμμένα (debug v1+v2+v3), Android 5.0+ (API 21). Εγκατάσταση:
@@ -55,20 +54,21 @@ Maven Central + GitHub mirrors):
 
 ```bash
 ./scripts/fetch-tools.sh    # κατεβάζει android.jar, aapt2, dx, signer
-./scripts/build-offline.sh  # παράγει dist/ECHO.apk
+./scripts/build-offline.sh  # παράγει dist/BEACON.apk
 ```
 
 ## Δομή
 
 ```
-app/src/main/java/gr/happyonline/echo/
+app/src/main/java/gr/happyonline/beacon/
   MainActivity.java   # fullscreen activity + lifecycle
-  GameView.java       # path recording/replay, ghosts, graze, rendering
+  GameView.java       # beam aiming, shadow AI, combos, nights, rendering
   SoundFx.java        # procedural PCM sound synthesis
 tools/icon_gen.py     # δημιουργεί τα launcher icons (pure Python)
 scripts/              # offline build pipeline
 ```
 
 > Σημείωση: προηγούμενες εκδόσεις του repo περιείχαν και τα παιχνίδια
-> **PULSE** (orbit dodger), **RUSH** (neon runner) και **SWARM**
-> (firefly flocking) — ο κώδικάς τους υπάρχει στο git history.
+> **PULSE** (orbit dodger), **RUSH** (neon runner), **SWARM** (firefly
+> flocking) και **ECHO** (self-replay ghosts) — ο κώδικάς τους υπάρχει
+> στο git history.
