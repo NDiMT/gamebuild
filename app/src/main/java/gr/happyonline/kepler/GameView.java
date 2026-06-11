@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
@@ -26,7 +27,7 @@ import java.util.Random;
  * Sling a comet into the pull of a planet and keep it inside the soft
  * shimmering band until it completes one full revolution: then it falls
  * asleep and becomes a moon, circling forever. Each level asks for a few
- * moons around each planet. Bach's Prelude in C plays underneath - this
+ * moons around each planet. Chopin's E minor Prelude plays underneath - this
  * is a lullaby, not a battle.
  */
 public class GameView extends SurfaceView implements SurfaceHolder.Callback {
@@ -98,9 +99,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF arcRect = new RectF();
-    private Shader nebulaA, nebulaB, nebulaC, nebulaD;
-    private BlurMaskFilter blurSmall, blurMed, blurBig;
-    private Bitmap galaxy;
+    private Shader skyShader;
+    private DashPathEffect bandDash;
 
     private static class Planet {
         float baseX, y, r, x;
@@ -146,8 +146,12 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
         sfx = new SoundFx();
 
-        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
         textPaint.setTextAlign(Paint.Align.CENTER);
+        try {
+            textPaint.setLetterSpacing(0.14f);
+        } catch (Throwable ignored) {
+        }
     }
 
     // ---------------------------------------------------------- level setup
@@ -591,263 +595,117 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawSky(Canvas c) {
-        // the pre-rendered galaxy, drifting almost imperceptibly
-        if (galaxy != null) {
-            float ox = (float) Math.sin(menuT * 0.045f) * width * 0.022f;
-            float oy = (float) Math.cos(menuT * 0.034f) * height * 0.013f;
-            c.save();
-            c.translate(-width * 0.04f + ox, -height * 0.03f + oy);
-            c.scale(1.08f, 1.07f);
-            c.drawBitmap(galaxy, 0, 0, null);
-            c.restore();
+        // a quiet chart-paper sky: one soft gradient, sparse pin-prick stars
+        if (skyShader != null) {
+            paint.setShader(skyShader);
+            paint.setStyle(Paint.Style.FILL);
+            c.drawRect(0, 0, width, height, paint);
+            paint.setShader(null);
         } else {
-            c.drawColor(0xFF0A0A1E);
+            c.drawColor(0xFF0E1018);
         }
-
-        // living aurora veils breathing over the still sky
-        breatheNebula(c, nebulaA, width * (0.30f + 0.06f * (float) Math.sin(menuT * 0.11f)),
-                height * (0.25f + 0.04f * (float) Math.cos(menuT * 0.13f)),
-                0.55f + 0.45f * (float) Math.sin(menuT * 0.23f));
-        breatheNebula(c, nebulaC, width * (0.72f + 0.05f * (float) Math.sin(menuT * 0.08f + 2f)),
-                height * (0.70f + 0.04f * (float) Math.cos(menuT * 0.10f)),
-                0.55f + 0.45f * (float) Math.sin(menuT * 0.17f + 3f));
-
-        // twinkling foreground stars in warm and cool tints
         paint.setStyle(Paint.Style.FILL);
-        for (int i = 0; i < 48; i++) {
+        for (int i = 0; i < 70; i++) {
             float sx = (i * 379f + 53f) % width;
             float sy = (i * 233f + 89f) % height;
-            float tw = 0.5f + 0.5f * (float) Math.sin(menuT * (0.8f + i % 5 * 0.3f) + i);
-            int a = (int) (16 + 52 * tw);
-            int col;
-            switch (i % 4) {
-                case 0: col = Color.argb(a, 255, 220, 180); break;
-                case 1: col = Color.argb(a, 190, 215, 255); break;
-                case 2: col = Color.argb(a, 255, 190, 230); break;
-                default: col = Color.argb(a, 200, 255, 230);
-            }
-            paint.setColor(col);
-            float r = Math.max(1.2f, width * 0.0013f) * (i % 3 == 0 ? 1.8f : 1f);
-            c.drawCircle(sx, sy, r, paint);
-            if (i % 6 == 0) {
-                paint.setColor((col & 0x00FFFFFF) | ((a / 3) << 24));
-                c.drawCircle(sx, sy, r * 3.2f, paint);
-            }
+            float tw = 0.6f + 0.4f * (float) Math.sin(menuT * (0.5f + i % 4 * 0.2f) + i);
+            paint.setColor(Color.argb((int) (24 + 42 * tw), 226, 232, 245));
+            c.drawCircle(sx, sy,
+                    Math.max(1f, width * 0.0011f) * (i % 5 == 0 ? 1.5f : 1f), paint);
         }
     }
 
-    private void breatheNebula(Canvas c, Shader s, float x, float y, float breath) {
-        if (s == null) return;
-        c.save();
-        c.translate(x, y);
-        paint.setShader(s);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setAlpha((int) (90 + 130 * breath));
-        c.drawCircle(0, 0, width * 0.85f, paint);
-        paint.setShader(null);
-        paint.setAlpha(255);
-        c.restore();
-    }
-
-    /** Paints the whole galaxy once: base glow, Milky Way, nebulas, dust. */
-    private Bitmap buildGalaxy(int w, int h) {
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas bc = new Canvas(bmp);
-        Paint bp = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Random r = new Random(7L);
-
-        // deep space base
-        bp.setShader(new LinearGradient(0, 0, w * 0.3f, h,
-                new int[]{0xFF161038, 0xFF0C0A24, 0xFF060616},
-                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-        bc.drawRect(0, 0, w, h, bp);
-        bp.setShader(null);
-
-        // colorful nebula clouds, layered and overlapping
-        int[][] pal = {
-                {214, 64, 168}, {124, 76, 230}, {46, 170, 214}, {238, 158, 64},
-                {244, 84, 128}, {84, 100, 240}, {64, 210, 170}, {170, 80, 235},
-        };
-        for (int i = 0; i < 11; i++) {
-            int[] cl = pal[r.nextInt(pal.length)];
-            float nx = r.nextFloat() * w;
-            float ny = r.nextFloat() * h;
-            float nr = w * (0.22f + r.nextFloat() * 0.42f);
-            bp.setShader(new RadialGradient(nx, ny, nr,
-                    new int[]{Color.argb(0x52, cl[0], cl[1], cl[2]),
-                            Color.argb(0x24, cl[0], cl[1], cl[2]), 0x00000000},
-                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-            bc.drawCircle(nx, ny, nr, bp);
-            bp.setShader(null);
-        }
-
-        // the Milky Way: a soft diagonal river of light full of dust
-        bc.save();
-        bc.rotate(-32f, w / 2f, h / 2f);
-        bp.setShader(new LinearGradient(0, h / 2f - h * 0.26f, 0, h / 2f + h * 0.26f,
-                new int[]{0x00000000, 0x2ECABDF5, 0x4AE6D9FF, 0x2ECABDF5, 0x00000000},
-                new float[]{0f, 0.30f, 0.5f, 0.70f, 1f}, Shader.TileMode.CLAMP));
-        bc.drawRect(-w, -h, w * 2f, h * 2f, bp);
-        bp.setShader(null);
-        bp.setStyle(Paint.Style.FILL);
-        for (int i = 0; i < 520; i++) {
-            float x = -w + r.nextFloat() * w * 3f;
-            float gy = (float) (r.nextGaussian() * h * 0.085f) + h / 2f;
-            int a = 18 + r.nextInt(95);
-            bp.setColor(Color.argb(a, 235, 228, 255));
-            bc.drawCircle(x, gy, w * (0.0007f + r.nextFloat() * 0.0017f), bp);
-        }
-        bc.restore();
-
-        // scattered field stars with soft halos
-        for (int i = 0; i < 240; i++) {
-            float x = r.nextFloat() * w;
-            float y = r.nextFloat() * h;
-            int a = 28 + r.nextInt(110);
-            int[] cl = pal[r.nextInt(pal.length)];
-            int tint = r.nextInt(3);
-            int cr2 = tint == 0 ? 255 : 200 + cl[0] / 5;
-            int cg2 = tint == 0 ? 244 : 205 + cl[1] / 6;
-            int cb2 = tint == 0 ? 230 : 215 + cl[2] / 7;
-            float rad = w * (0.0009f + r.nextFloat() * 0.0022f);
-            bp.setColor(Color.argb(a / 3, cr2, cg2, cb2));
-            bc.drawCircle(x, y, rad * 3.2f, bp);
-            bp.setColor(Color.argb(a, cr2, cg2, cb2));
-            bc.drawCircle(x, y, rad, bp);
-        }
-
-        // a few distant fuzzy galaxies
-        for (int i = 0; i < 4; i++) {
-            float gx = r.nextFloat() * w;
-            float gy2 = r.nextFloat() * h;
-            float gr = w * (0.02f + r.nextFloat() * 0.025f);
-            bc.save();
-            bc.rotate(r.nextFloat() * 180f, gx, gy2);
-            bc.scale(1f, 0.42f, gx, gy2);
-            bp.setShader(new RadialGradient(gx, gy2, gr * 2.6f,
-                    new int[]{0x66EFE6FF, 0x2ABBA8E8, 0x00000000},
-                    new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
-            bc.drawCircle(gx, gy2, gr * 2.6f, bp);
-            bp.setShader(null);
-            bc.restore();
-        }
-        return bmp;
-    }
-
-    private void drawNebula(Canvas c, Shader s, float x, float y) {
-        if (s == null) return;
-        c.save();
-        c.translate(x, y);
-        paint.setShader(s);
-        paint.setStyle(Paint.Style.FILL);
-        c.drawCircle(0, 0, width * 0.85f, paint);
-        paint.setShader(null);
-        c.restore();
+    private float hairline() {
+        return Math.max(1.5f, width * 0.0022f);
     }
 
     private void drawPlanets(Canvas c) {
         for (int i = 0; i < planets.size(); i++) {
             Planet p = planets.get(i);
-            float[] bandHsv = {p.hue, 0.55f, 1f};
-            int bandCol = Color.HSVToColor(bandHsv);
+            float[] hsv = {p.hue, 0.45f, 0.95f};
+            int line = p.repulse ? 0xFFD8788C : Color.HSVToColor(hsv);
 
             if (!p.repulse) {
-                // the capture band: a soft shimmering annulus in the
-                // planet's own color
-                float mid = (p.bandIn + p.bandOut) / 2f;
-                float bw = p.bandOut - p.bandIn;
-                float shimmer = 0.75f + 0.25f * (float) Math.sin(menuT * 2f + i);
-                glowPaint.setStyle(Paint.Style.STROKE);
-                glowPaint.setMaskFilter(blurBig);
-                glowPaint.setStrokeWidth(bw);
-                glowPaint.setColor((bandCol & 0x00FFFFFF)
-                        | (((int) (22 * shimmer + p.bloom * 60)) << 24));
-                c.drawCircle(p.x, p.y, mid, glowPaint);
-                glowPaint.setMaskFilter(blurMed);
-                glowPaint.setStrokeWidth(width * 0.004f);
-                glowPaint.setColor((bandCol & 0x00FFFFFF)
-                        | (((int) (80 * shimmer)) << 24));
-                c.drawCircle(p.x, p.y, p.bandIn, glowPaint);
-                c.drawCircle(p.x, p.y, p.bandOut, glowPaint);
-                glowPaint.setMaskFilter(null);
-                // fairy dust circling the band
-                glowPaint.setStyle(Paint.Style.FILL);
-                glowPaint.setMaskFilter(blurSmall);
-                for (int d = 0; d < 16; d++) {
-                    float a = menuT * 0.35f + d * TAU / 16f;
-                    float rr = mid + bw * 0.30f * (float) Math.sin(menuT * 0.8f + d * 2f);
-                    float[] dustHsv = {(p.hue + d * 12f) % 360f, 0.4f, 1f};
-                    glowPaint.setColor((Color.HSVToColor(dustHsv) & 0x00FFFFFF)
-                            | (((int) (90 * shimmer)) << 24));
-                    c.drawCircle(p.x + (float) Math.cos(a) * rr,
-                            p.y + (float) Math.sin(a) * rr, width * 0.003f, glowPaint);
-                }
-                glowPaint.setMaskFilter(null);
+                // capture band: two delicate dashed rings, slowly turning
+                boolean active = flying && capP == i;
+                int a = active ? 150 : 64 + (int) (p.bloom * 100);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(hairline());
+                paint.setPathEffect(bandDash);
+                paint.setColor((line & 0x00FFFFFF) | (a << 24));
+                c.save();
+                c.rotate(menuT * 2.4f, p.x, p.y);
+                c.drawCircle(p.x, p.y, p.bandIn, paint);
+                c.restore();
+                c.save();
+                c.rotate(-menuT * 1.6f, p.x, p.y);
+                c.drawCircle(p.x, p.y, p.bandOut, paint);
+                c.restore();
+                paint.setPathEffect(null);
             }
 
-            // body: pure gradient orb, no outlines
-            if (p.glow != null) {
-                c.save();
-                c.translate(p.x, p.y);
-                paint.setShader(p.glow);
-                paint.setStyle(Paint.Style.FILL);
-                float bloomK = 1f + p.bloom * 0.25f;
-                c.drawCircle(0, 0, p.r * 2.4f * bloomK, paint);
-                paint.setShader(null);
-                c.restore();
+            // body: a quiet disc with a single fine ring
+            paint.setStyle(Paint.Style.FILL);
+            float[] fillHsv = {p.hue, 0.35f, 0.16f};
+            paint.setColor(p.repulse ? 0xFF1E1218 : Color.HSVToColor(fillHsv));
+            c.drawCircle(p.x, p.y, p.r, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(hairline() * (1f + p.bloom));
+            paint.setColor(line);
+            c.drawCircle(p.x, p.y, p.r, paint);
+            if (p.bloom > 0f) {
+                paint.setColor((line & 0x00FFFFFF) | (((int) (p.bloom * 120f)) << 24));
+                c.drawCircle(p.x, p.y, p.r * (1f + p.bloom * 0.5f), paint);
             }
             if (p.repulse) {
-                glowPaint.setStyle(Paint.Style.STROKE);
-                glowPaint.setMaskFilter(blurSmall);
-                glowPaint.setStrokeWidth(width * 0.006f);
-                glowPaint.setColor(0xCCFFAFC2);
-                c.drawLine(p.x - p.r * 0.45f, p.y, p.x + p.r * 0.45f, p.y, glowPaint);
-                glowPaint.setMaskFilter(null);
+                paint.setStrokeWidth(hairline());
+                c.drawLine(p.x - p.r * 0.4f, p.y, p.x + p.r * 0.4f, p.y, paint);
             }
 
-            // moon requirement pips: little sleeping lights
+            // moon requirement pips: filled when earned, outlined when owed
             if (p.needed > 0) {
-                glowPaint.setStyle(Paint.Style.FILL);
-                glowPaint.setMaskFilter(blurSmall);
-                float px0 = p.x - (p.needed - 1) * width * 0.018f;
+                float px0 = p.x - (p.needed - 1) * width * 0.014f;
                 for (int k = 0; k < p.needed; k++) {
                     boolean got = k < p.captured;
-                    glowPaint.setColor(got ? 0xFFFFE6A0 : 0x66FFFFFF);
-                    c.drawCircle(px0 + k * width * 0.036f, p.y,
-                            width * (got ? 0.010f : 0.007f), glowPaint);
+                    if (got) {
+                        paint.setStyle(Paint.Style.FILL);
+                        paint.setColor(0xFFEFCB8A);
+                    } else {
+                        paint.setStyle(Paint.Style.STROKE);
+                        paint.setStrokeWidth(hairline() * 0.8f);
+                        paint.setColor(0x99E9EDF7);
+                    }
+                    c.drawCircle(px0 + k * width * 0.028f, p.y, width * 0.006f, paint);
                 }
-                glowPaint.setMaskFilter(null);
             }
         }
     }
 
     private void drawMoons(Canvas c) {
-        glowPaint.setStyle(Paint.Style.FILL);
+        // every captured moon leaves a permanent fine orbit line:
+        // the level slowly becomes an astronomer's diagram
         for (int i = 0; i < moons.size(); i++) {
             Moon m = moons.get(i);
             Planet p = planets.get(m.planet);
             float mx = p.x + (float) Math.cos(m.angle) * m.radius;
             float my = p.y + (float) Math.sin(m.angle) * m.radius;
 
-            // sleepy luminous trail
-            glowPaint.setMaskFilter(blurSmall);
-            for (int s = 1; s <= 9; s++) {
-                float a = m.angle - Math.signum(m.omega) * s * 0.085f;
-                float tx = p.x + (float) Math.cos(a) * m.radius;
-                float ty = p.y + (float) Math.sin(a) * m.radius;
-                glowPaint.setColor(moonColor(m, 0.13f * (1f - s / 10f)));
-                c.drawCircle(tx, ty, ballR * 1.2f * (1f - s * 0.08f), glowPaint);
-            }
-            float pulse = 1f + 0.1f * (float) Math.sin(menuT * 2.4f + i);
-            glowPaint.setMaskFilter(blurMed);
-            glowPaint.setColor(moonColor(m, 0.45f));
-            c.drawCircle(mx, my, ballR * 3.2f * pulse, glowPaint);
-            glowPaint.setMaskFilter(blurSmall);
-            glowPaint.setColor(moonColor(m, 1f));
-            c.drawCircle(mx, my, ballR * 1.3f, glowPaint);
-            glowPaint.setColor(0xCCFFFFFF);
-            c.drawCircle(mx, my, ballR * 0.55f, glowPaint);
-            glowPaint.setMaskFilter(null);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(hairline() * 0.8f);
+            paint.setColor(moonColor(m, 0.22f));
+            c.drawCircle(p.x, p.y, m.radius, paint);
+
+            // a short trailing arc, like a slow exposure
+            arcRect.set(p.x - m.radius, p.y - m.radius, p.x + m.radius, p.y + m.radius);
+            float headDeg = m.angle * 360f / TAU;
+            float tailDeg = 26f * Math.signum(m.omega);
+            paint.setStrokeWidth(hairline());
+            paint.setColor(moonColor(m, 0.55f));
+            c.drawArc(arcRect, headDeg - tailDeg, tailDeg, false, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(moonColor(m, 1f));
+            c.drawCircle(mx, my, ballR * 0.95f, paint);
         }
     }
 
@@ -857,16 +715,10 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         arcRect.set(p.x - r, p.y - r, p.x + r, p.y + r);
         float sweepDeg = capSweep * 360f / TAU;
         float startDeg = (capLastTheta * 360f / TAU) - sweepDeg;
-        glowPaint.setStyle(Paint.Style.STROKE);
-        glowPaint.setMaskFilter(blurMed);
-        glowPaint.setStrokeWidth(width * 0.020f);
-        glowPaint.setColor(0x55FFE6A0);
-        c.drawArc(arcRect, startDeg, sweepDeg, false, glowPaint);
-        glowPaint.setMaskFilter(blurSmall);
-        glowPaint.setStrokeWidth(width * 0.006f);
-        glowPaint.setColor(0xEEFFE6A0);
-        c.drawArc(arcRect, startDeg, sweepDeg, false, glowPaint);
-        glowPaint.setMaskFilter(null);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(hairline() * 1.4f);
+        paint.setColor(0xF2EFCB8A);
+        c.drawArc(arcRect, startDeg, sweepDeg, false, paint);
 
         // progress whisper near the planet
         float k = Math.min(1f, Math.abs(capSweep) / TAU);
@@ -938,30 +790,25 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawComet(Canvas c) {
-        glowPaint.setStyle(Paint.Style.FILL);
+        // a pencil-line of light behind a single white point
         if (flying) {
-            glowPaint.setMaskFilter(blurSmall);
-            for (int s = 0; s < trailX.length; s++) {
-                int idx = (trailHead - s + trailX.length * 2) % trailX.length;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            for (int s = 0; s < trailX.length - 1; s++) {
+                int i0 = (trailHead - s + trailX.length * 2) % trailX.length;
+                int i1 = (trailHead - s - 1 + trailX.length * 2) % trailX.length;
                 float k = 1f - s / (float) trailX.length;
-                // the tail shifts from white-hot to violet as it fades
-                int col = Color.argb((int) (80f * k),
-                        (int) (180 + 75 * k), (int) (160 + 95 * k), 255);
-                glowPaint.setColor(col);
-                c.drawCircle(trailX[idx], trailY[idx], ballR * (0.3f + 0.9f * k), glowPaint);
+                paint.setStrokeWidth(hairline() * (0.5f + 0.9f * k));
+                paint.setColor(Color.argb((int) (120f * k), 233, 237, 247));
+                c.drawLine(trailX[i0], trailY[i0], trailX[i1], trailY[i1], paint);
             }
+            paint.setStrokeCap(Paint.Cap.BUTT);
         }
-        float breathe = 1f + 0.06f * (float) Math.sin(menuT * 3f);
-        glowPaint.setMaskFilter(blurBig);
-        glowPaint.setColor(0x4480C8FF);
-        c.drawCircle(bx, by, ballR * 4.2f * breathe, glowPaint);
-        glowPaint.setMaskFilter(blurMed);
-        glowPaint.setColor(0x66BFE8FF);
-        c.drawCircle(bx, by, ballR * 2.4f * breathe, glowPaint);
-        glowPaint.setMaskFilter(blurSmall);
-        glowPaint.setColor(0xFFF4FBFF);
-        c.drawCircle(bx, by, ballR, glowPaint);
-        glowPaint.setMaskFilter(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0x2EE9EDF7);
+        c.drawCircle(bx, by, ballR * 2.2f, paint);
+        paint.setColor(0xFFF7F9FF);
+        c.drawCircle(bx, by, ballR * 0.95f, paint);
     }
 
     private void drawParticles(Canvas c) {
@@ -969,11 +816,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         for (int i = 0; i < particles.size(); i++) {
             Particle p = particles.get(i);
             float k = p.life / p.maxLife;
-            // halo + core, soft without a mask filter (cheap for many dots)
-            paint.setColor((p.color & 0x00FFFFFF) | (((int) (k * 70f)) << 24));
-            c.drawCircle(p.x, p.y, p.size * 2.4f * (0.4f + 0.6f * k), paint);
-            paint.setColor((p.color & 0x00FFFFFF) | (((int) (k * 210f)) << 24));
-            c.drawCircle(p.x, p.y, p.size * (0.4f + 0.6f * k), paint);
+            paint.setColor((p.color & 0x00FFFFFF) | (((int) (k * 190f)) << 24));
+            c.drawCircle(p.x, p.y, p.size * 0.7f * (0.4f + 0.6f * k), paint);
         }
     }
 
@@ -1019,29 +863,26 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private void drawMenu(Canvas c) {
         // a sleeping system: glowing planet, tinted band, one golden moon
         float pcx = width / 2f, pcy = height * 0.52f, pr = width * 0.085f;
-        glowPaint.setStyle(Paint.Style.STROKE);
-        glowPaint.setMaskFilter(blurBig);
-        glowPaint.setStrokeWidth(pr * 1.1f);
-        glowPaint.setColor(0x2270C8FF);
-        c.drawCircle(pcx, pcy, pr * 2.1f, glowPaint);
-        glowPaint.setMaskFilter(null);
-        glowPaint.setStyle(Paint.Style.FILL);
-        glowPaint.setMaskFilter(blurMed);
-        glowPaint.setColor(0x664A6AE0);
-        c.drawCircle(pcx, pcy, pr * 1.5f, glowPaint);
-        glowPaint.setColor(0xFF5A74C8);
-        c.drawCircle(pcx, pcy, pr, glowPaint);
-        glowPaint.setMaskFilter(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFF151A2B);
+        c.drawCircle(pcx, pcy, pr, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(hairline());
+        paint.setColor(0xFF8FA8E0);
+        c.drawCircle(pcx, pcy, pr, paint);
+        paint.setPathEffect(bandDash);
+        paint.setColor(0x668FA8E0);
+        c.save();
+        c.rotate(menuT * 2f, pcx, pcy);
+        c.drawCircle(pcx, pcy, pr * 2.1f, paint);
+        c.restore();
+        paint.setPathEffect(null);
         float ma = menuT * 0.9f;
         float mx = pcx + (float) Math.cos(ma) * pr * 2.1f;
         float my = pcy + (float) Math.sin(ma) * pr * 2.1f;
-        glowPaint.setMaskFilter(blurMed);
-        glowPaint.setColor(0x55FFE6A0);
-        c.drawCircle(mx, my, ballR * 3.2f, glowPaint);
-        glowPaint.setMaskFilter(blurSmall);
-        glowPaint.setColor(0xFFFFE6A0);
-        c.drawCircle(mx, my, ballR * 1.2f, glowPaint);
-        glowPaint.setMaskFilter(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFFEFCB8A);
+        c.drawCircle(mx, my, ballR * 0.95f, paint);
 
         textPaint.setColor(Color.WHITE);
         textPaint.setTextSize(width * 0.16f);
@@ -1054,7 +895,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         textPaint.setTextSize(width * 0.036f);
         c.drawText("sling  •  let gravity cradle it  •  one full circle = a moon",
                 width / 2f, height * 0.305f, textPaint);
-        c.drawText("to the sound of Bach's Prelude in C", width / 2f, height * 0.34f, textPaint);
+        c.drawText("to the sound of Chopin, Op. 28 No. 4", width / 2f, height * 0.34f, textPaint);
 
         float blink = 0.55f + 0.45f * (float) Math.sin(menuT * 3f);
         textPaint.setTextSize(width * 0.065f);
@@ -1169,29 +1010,11 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             width = w;
             height = hpx;
             ballR = w * 0.013f;
-            nebulaA = new RadialGradient(0, 0, w * 0.85f,
-                    new int[]{0x4456409C, 0x22303878, 0x00000000},
-                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
-            nebulaB = new RadialGradient(0, 0, w * 0.75f,
-                    new int[]{0x3C20888C, 0x18205868, 0x00000000},
-                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
-            nebulaC = new RadialGradient(0, 0, w * 0.65f,
-                    new int[]{0x38883A80, 0x16402458, 0x00000000},
-                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
-            nebulaD = new RadialGradient(0, 0, w * 0.6f,
-                    new int[]{0x2E946A30, 0x14583820, 0x00000000},
-                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
-            blurSmall = new BlurMaskFilter(w * 0.008f, BlurMaskFilter.Blur.NORMAL);
-            blurMed = new BlurMaskFilter(w * 0.022f, BlurMaskFilter.Blur.NORMAL);
-            blurBig = new BlurMaskFilter(w * 0.05f, BlurMaskFilter.Blur.NORMAL);
-            if (galaxy != null) {
-                galaxy.recycle();
-            }
-            galaxy = buildGalaxy(w, hpx);
-            for (int i = 0; i < planets.size(); i++) {
-                Planet p = planets.get(i);
-                p.glow = planetGlow(p.hue, p.r, p.repulse);
-            }
+            skyShader = new LinearGradient(0, 0, w * 0.2f, hpx,
+                    new int[]{0xFF131521, 0xFF0E1018, 0xFF0A0B10},
+                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
+            bandDash = new DashPathEffect(
+                    new float[]{w * 0.0045f, w * 0.014f}, 0f);
             if (changed && state != STATE_MENU) {
                 buildLevel(level);
             }
