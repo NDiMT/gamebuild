@@ -35,72 +35,67 @@ def sample(u, v):
     if plate > 0:
         return (0, 0, 0, 0)
 
-    # dark navy base, slightly lighter in the middle
-    base = 0.10 + 0.07 * max(0.0, 1.0 - d * 1.2)
-    cr, cg, cb = base * 0.55, base * 0.75, base * 1.6
+    # SAVE THE DOGE: the smug doge face on a sky, a bee buzzing in,
+    # a black ink shield drawn over its head
+    cr, cg, cb = 0.55, 0.80, 0.94  # sky
 
-    # KEPLER: a pastel planet, its shimmering capture band,
-    # a golden moon mid-orbit and a dotted comet approach
-    pxp, pyp, pr = -0.04, 0.04, 0.26
-    pd = math.hypot(u - pxp, v - pyp)
+    # ground at the bottom
+    if v > 0.60:
+        cr, cg, cb = 0.54, 0.35, 0.20
+        if v < 0.66:
+            cr, cg, cb = 0.49, 0.65, 0.26  # grass strip
 
-    # nebula tints
-    for nx, ny, nr, (tr, tg, tb) in ((-0.5, -0.5, 0.9, (0.30, 0.22, 0.55)),
-                                     (0.6, 0.55, 0.8, (0.10, 0.40, 0.45))):
-        nd = math.hypot(u - nx, v - ny)
-        k = math.exp(-((nd / nr) ** 2)) * 0.35
-        cr += tr * k
-        cg += tg * k
-        cb += tb * k
+    def tri(px, py, x1, y1, x2, y2, x3, y3):
+        b1 = (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2) < 0
+        b2 = (px - x3) * (y2 - y3) - (x2 - x3) * (py - y3) < 0
+        b3 = (px - x1) * (y3 - y1) - (x3 - x1) * (py - y1) < 0
+        return b1 == b2 and b2 == b3
 
-    # capture band annulus
-    band_mid, band_w = pr * 1.95, pr * 0.55
-    bd = abs(pd - band_mid)
-    if bd < band_w / 2:
-        cr += 0.10
-        cg += 0.12
-        cb += 0.18
-    if abs(pd - (band_mid - band_w / 2)) < 0.012 or abs(pd - (band_mid + band_w / 2)) < 0.012:
-        cr += 0.18
-        cg += 0.22
-        cb += 0.30
+    face = (0.97, 0.80, 0.28)
+    cx0, cy0, R = 0.0, 0.10, 0.52
 
-    # planet body (pastel indigo)
-    if pd < pr:
-        cr, cg, cb = 0.26, 0.32, 0.55
-        if math.hypot(u - pxp - 0.06, v - pyp - 0.05) > pr * 0.85:
-            cr, cg, cb = 0.19, 0.24, 0.44
-    elif pd < pr * 1.10:
-        cr, cg, cb = 0.45, 0.55, 0.85
+    # ears (behind head)
+    if tri(u, v, -0.42, -0.05, -0.30, -0.72, 0.00, -0.28) \
+            or tri(u, v, 0.42, -0.05, 0.30, -0.72, 0.00, -0.28):
+        cr, cg, cb = 0.90, 0.70, 0.20
 
-    # golden progress arc along the band (about 270 degrees)
-    ang = math.atan2(v - pyp, u - pxp)
-    if bd < 0.02 and not (-0.6 < ang < 0.2):
-        cr, cg, cb = 1.0, 0.88, 0.55
-    # golden moon at the arc's head
-    ma = 0.2
-    mx0 = pxp + math.cos(ma) * band_mid
-    my0 = pyp + math.sin(ma) * band_mid
-    md = math.hypot(u - mx0, v - my0)
-    mglow = math.exp(-((md / 0.15) ** 2)) * 0.8
-    cr += mglow
-    cg += mglow * 0.88
-    cb += mglow * 0.55
-    if md < 0.07:
-        cr, cg, cb = 1.0, 0.92, 0.66
+    hd = math.hypot(u - cx0, v - cy0)
+    if hd < R:
+        cr, cg, cb = face
+        if v - cy0 > 0.05:               # slightly darker lower muzzle
+            cr, cg, cb = 0.95, 0.74, 0.22
+        # pink cheeks
+        if math.hypot(u + 0.28, v - 0.26) < 0.13 \
+                or math.hypot(u - 0.28, v - 0.26) < 0.13:
+            cr, cg, cb = 0.98, 0.60, 0.66
+        # eyes (smug, half-lidded)
+        for ex in (-0.21, 0.21):
+            if math.hypot(u - ex, v - 0.02) < 0.135:
+                if v < -0.02:            # upper lid = face color
+                    cr, cg, cb = face
+                else:
+                    cr, cg, cb = 1.0, 1.0, 1.0
+                    if math.hypot(u - ex, v - 0.05) < 0.075:
+                        cr, cg, cb = 0.12, 0.09, 0.05
+        # nose
+        if math.hypot(u, v - 0.20) < 0.06:
+            cr, cg, cb = 0.12, 0.09, 0.05
 
-    # dotted comet approach from bottom-left
-    for i in range(7):
-        t = i / 6.0
-        tx = -0.85 + t * 0.55
-        ty = 0.85 - t * 0.45
-        if math.hypot(u - tx, v - ty) < 0.022:
-            cr, cg, cb = 0.93, 0.97, 1.0
-    sd0 = math.hypot(u + 0.85, v - 0.85)
-    sg = math.exp(-((sd0 / 0.12) ** 2)) * 0.7
-    cr += sg * 0.9
-    cg += sg * 0.95
-    cb += sg
+    # a bee top-right, with translucent wings
+    bd = math.hypot(u - 0.58, v + 0.55)
+    if bd < 0.20 and bd >= 0.12:
+        cr, cg, cb = 0.92, 0.96, 1.0     # wings
+    if bd < 0.12:
+        if int(((u - 0.58) + 0.12) / 0.06) % 2 == 0:
+            cr, cg, cb = 0.97, 0.76, 0.0
+        else:
+            cr, cg, cb = 0.13, 0.13, 0.13
+
+    # a thick black ink shield arc drawn over the doge
+    ad = math.hypot(u - cx0, v - cy0)
+    ang = math.atan2(v - cy0, u - cx0)
+    if abs(ad - R * 1.5) < 0.045 and ang < 0.15:
+        cr, cg, cb = 0.10, 0.10, 0.10
 
     aa = min(1.0, -plate / 0.02)  # soft edge on the plate
     return (min(cr, 1.0), min(cg, 1.0), min(cb, 1.0), aa)

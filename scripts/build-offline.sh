@@ -34,13 +34,13 @@ echo "==> aapt2 compile"
 
 echo "==> aapt2 link"
 # the Gradle build supplies the package via 'namespace'; inject it here
-sed 's/<manifest /<manifest package="gr.happyonline.kepler" /' \
+sed 's/<manifest /<manifest package="gr.happyonline.doge" /' \
     "$SRC/AndroidManifest.xml" > "$OUT/AndroidManifest.xml"
 "$AAPT2" link \
     -I "$ANDROID_JAR" \
     --manifest "$OUT/AndroidManifest.xml" \
     --min-sdk-version 21 --target-sdk-version 30 \
-    --version-code 8 --version-name 1.7 \
+    --version-code 1 --version-name 1.0 \
     --java "$OUT/gen" \
     -o "$OUT/apk/base.apk" \
     "$OUT/res.zip"
@@ -60,8 +60,8 @@ echo "==> package + align + sign"
 "$ZIPALIGN" -f 4 "$OUT/apk/base.apk" "$OUT/apk/aligned.apk"
 java -jar "$SIGNER_JAR" --apks "$OUT/apk/aligned.apk" --allowResign >/dev/null
 
-cp "$OUT/apk/aligned-aligned-debugSigned.apk" "$DIST/KEPLER.apk" 2>/dev/null \
-    || cp "$OUT/apk/"aligned-*Signed*.apk "$DIST/KEPLER.apk"
+cp "$OUT/apk/aligned-aligned-debugSigned.apk" "$DIST/DOGE.apk" 2>/dev/null \
+    || cp "$OUT/apk/"aligned-*Signed*.apk "$DIST/DOGE.apk"
 
-echo "==> done: $DIST/KEPLER.apk"
-ls -la "$DIST/KEPLER.apk"
+echo "==> done: $DIST/DOGE.apk"
+ls -la "$DIST/DOGE.apk"

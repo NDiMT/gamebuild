@@ -3,15 +3,15 @@ plugins {
 }
 
 android {
-    namespace 'gr.happyonline.kepler'
+    namespace 'gr.happyonline.doge'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'gr.happyonline.kepler'
+        applicationId 'gr.happyonline.doge'
         minSdk 21
         targetSdk 34
-        versionCode 8
-        versionName '1.7'
+        versionCode 1
+        versionName '1.0'
     }
 
     buildTypes {

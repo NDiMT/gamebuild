@@ -1,4 +1,4 @@
-package gr.happyonline.kepler;
+package gr.happyonline.doge;
 
 import android.app.Activity;
 import android.os.Bundle;

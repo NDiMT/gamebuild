@@ -1,36 +1,37 @@
-# KEPLER
+# SAVE THE DOGE
 
-Το πιο μαγικό παιχνίδι του repo: **slingshot σώματα και προσπάθησε να τα
-βάλεις σε τροχιά** γύρω από πλανήτες — με υπόκρουση το **Πρελούδιο σε Ντο
-μείζονα του Bach (BWV 846)**, συντεθειμένο νότα-νότα σε PCM με ήχο άρπας
-κατά την εκκίνηση (κανένα αρχείο ήχου στο APK, seamless loop).
+Το αληθινό παιχνίδι πίσω από τα παραπλανητικά ads: ένας **doge** κάθεται
+στο έδαφος και ένα σμήνος **μέλισσες** ξεχύνεται από την κυψέλη για να τον
+τσιμπήσει. Έχεις περιορισμένο **μελάνι** — σύρε το δάχτυλο για να
+ζωγραφίσεις συμπαγείς γραμμές/θόλο που οι μέλισσες δεν μπορούν να
+περάσουν, και κράτησέ τον ασφαλή μέχρι να τελειώσει ο χρόνος.
 
 ## Gameplay
 
-- **Σύρε & άφησε** = σφεντόνα (με dotted preview τροχιάς).
-- Κάθε πλανήτης έχει μια **λαμπερή ζώνη σύλληψης** (annulus). Κράτησε τον
-  κομήτη μέσα της για **μία πλήρη περιφορά** (βλέπεις χρυσό τόξο προόδου
-  και ποσοστό) — και «αποκοιμιέται»: γίνεται **φεγγάρι** που μένει σε
-  τροχιά για πάντα.
-- Κάθε level ζητά συγκεκριμένα φεγγάρια ανά πλανήτη (pips στο κέντρο του).
-- Κλιμάκωση: 2ος πλανήτης (lvl 3), στενότερες ζώνες, **repulsors** (lvl 7+),
-  3ος πλανήτης (lvl 8), περισσότερα φεγγάρια ανά πλανήτη, **κινούμενοι
-  πλανήτες** (lvl 12+).
-- Πρόσκρουση/χάσιμο στο κενό = απλώς νέος κομήτης, χωρίς τιμωρία.
-  Άπειρα procedural levels, η πρόοδος σώζεται (level, σύνολο φεγγαριών).
-- Αισθητική: νεφελώματα που παρασύρονται, αστέρια που τρεμοπαίζουν,
-  fairy dust στις ζώνες, harp glissando σε κάθε σύλληψη.
+- **Σύρε** οπουδήποτε για να ζωγραφίσεις γραμμές μελανιού (η μπάρα δείχνει
+  πόσο μελάνι έμεινε). Σχημάτισε θόλο/τοίχο γύρω από τον doge.
+- Οι **μέλισσες** βγαίνουν από την κυψέλη και ορμάνε στη φάτσα του doge,
+  στριμώχνονται και γλιστράνε πάνω στις γραμμές σου.
+- **Επιβίωσε** μέχρι το ρολόι να φτάσει στο 0 → νίκη, επόμενο level.
+  Μία μέλισσα αγγίζει τον doge → "OUCH!", retry.
+- Το έδαφος είναι συμπαγές — αρκεί να καλύψεις από πάνω.
+- Κουμπί **CLEAR** (πάνω δεξιά) σβήνει το μελάνι σου για να ξανασχεδιάσεις.
+- Κάθε level: περισσότερες/γρηγορότερες μέλισσες, λιγότερο μελάνι.
+  Η πρόοδος και το best level αποθηκεύονται.
 
-Όλα procedural (Canvas/SurfaceView) — γραφικά, ήχοι ΚΑΙ μουσική. ~90 KB APK.
+Όλα procedural (Canvas/SurfaceView) — γραφικά και ήχοι (loop βουητού
+μελισσών, μολύβι, τσίμπημα, φανφάρα νίκης) συντίθενται κατά την εκκίνηση.
+Κανένα asset, ~42 KB APK.
 
 ## Έτοιμα APKs
 
 | Παιχνίδι | Αρχείο | Περιγραφή |
 |---|---|---|
-| **KEPLER** | [`dist/KEPLER.apk`](dist/KEPLER.apk) | Orbital capture με μουσική Bach (τρέχων κώδικας στο `app/`) |
+| **SAVE THE DOGE** | [`dist/DOGE.apk`](dist/DOGE.apk) | Ζωγραφίζεις γραμμές για να σώσεις τον doge από τις μέλισσες (τρέχων κώδικας στο `app/`) |
+| **KEPLER** | [`dist/KEPLER.apk`](dist/KEPLER.apk) | Orbital capture με μουσική Satie |
 | **ORBIT** | [`dist/ORBIT.apk`](dist/ORBIT.apk) | Gravity golf με άπειρα levels |
 | **TETHER** | [`dist/TETHER.apk`](dist/TETHER.apk) | Σκοινί-λεπίδα με physics flail |
-| **BEACON** | [`dist/BEACON.apk`](dist/BEACON.apk) | Οι σκιές κινούνται μόνο στο σκοτάδι + survivor upgrades |
+| **BEACON** | [`dist/BEACON.apk`](dist/BEACON.apk) | Οι σκιές κινούνται μόνο στο σκοτάδι |
 | **ECHO** | [`dist/ECHO.apk`](dist/ECHO.apk) | Αποφεύγεις looping replays του εαυτού σου |
 | **SWARM** | [`dist/SWARM.apk`](dist/SWARM.apk) | Οδηγείς σμήνος πυγολαμπίδων με flocking AI |
 
@@ -58,16 +59,16 @@ Maven Central + GitHub mirrors):
 
 ```bash
 ./scripts/fetch-tools.sh    # κατεβάζει android.jar, aapt2, dx, signer
-./scripts/build-offline.sh  # παράγει dist/KEPLER.apk
+./scripts/build-offline.sh  # παράγει dist/DOGE.apk
 ```
 
 ## Δομή
 
 ```
-app/src/main/java/gr/happyonline/kepler/
+app/src/main/java/gr/happyonline/doge/
   MainActivity.java   # fullscreen activity + lifecycle
-  GameView.java       # orbital capture, gravity, level generation, rendering
-  SoundFx.java        # SFX + Bach BWV 846 synthesized into a looping track
+  GameView.java       # bees, ink drawing, collisions, levels, rendering
+  SoundFx.java        # procedural SFX + looping bee buzz
 tools/icon_gen.py     # δημιουργεί τα launcher icons (pure Python)
 scripts/              # offline build pipeline
 ```
