@@ -105,23 +105,20 @@ public class SoundFx {
         return t;
     }
 
-    /** Angry hive: two detuned saw-ish tones with a slow tremolo. */
+    /** A soft, warm hive hum: two close sines, gentle tremolo, low volume. */
     private static short[] buzzBuffer() {
         int n = RATE; // 1 second, loops seamlessly
         short[] out = new short[n];
         for (int i = 0; i < n; i++) {
             double t = i / (double) RATE;
-            double a = saw(220f, i) * 0.5 + saw(223f, i) * 0.5;
-            double trem = 0.7 + 0.3 * Math.sin(2 * Math.PI * 18 * t);
-            out[i] = (short) (a * trem * 0.16 * 32767);
+            // low warm tone with a faint upper harmonic, slightly detuned
+            double a = Math.sin(2 * Math.PI * 138 * t)
+                    + 0.9 * Math.sin(2 * Math.PI * 141 * t)
+                    + 0.18 * Math.sin(2 * Math.PI * 276 * t);
+            double trem = 0.82 + 0.18 * Math.sin(2 * Math.PI * 7 * t); // slow, soft
+            out[i] = (short) (a * trem * 0.035 * 32767);
         }
         return out;
-    }
-
-    private static double saw(float freq, int i) {
-        double period = RATE / freq;
-        double ph = (i % period) / period;
-        return 2.0 * ph - 1.0;
     }
 
     private static short[] tone(float freq, float dur, float vol) {

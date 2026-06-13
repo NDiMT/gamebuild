@@ -36,6 +36,11 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private static final float TAU = (float) (Math.PI * 2.0);
     private static final int SUBSTEPS = 3;
 
+    // pushable-wall physics: bees nudge your ink, a spring pulls it back
+    private static final float STROKE_PUSH = 0.022f;
+    private static final float STROKE_SPRING = 9f;
+    private static final float STROKE_DAMP = 4f;
+
     private final SurfaceHolder holder;
     private final Object lock = new Object();
     private final Random rng = new Random();
@@ -50,7 +55,15 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private float groundY;
     private float dogeX, dogeY, dogeR, stingDist;
     private float beeR, lineR;
-    private float hiveX, hiveY;
+    private float baseGroundY;
+
+    // per-level layout
+    private int theme;
+    private int skyTop, skyBot, dirtCol, grassCol, moundCol, rockCol;
+    private boolean hudDark;
+    private float maxStrokeOff;
+    private final ArrayList<float[]> hives = new ArrayList<float[]>();   // {x,y}
+    private final ArrayList<float[]> rocks = new ArrayList<float[]>();   // {x,y,r}
 
     // progress
     private int level;
@@ -87,6 +100,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
 
     private static class Stroke {
         final ArrayList<float[]> pts = new ArrayList<float[]>();
+        float ox, oy, ovx, ovy;   // current displacement + velocity from bee shoves
     }
 
     private static class Bee {
@@ -135,8 +149,83 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         return width * (0.17f + 0.012f * Math.min(level, 14));
     }
 
+    /** Builds the layout, palette and obstacles for a level (deterministic). */
+    private void applyLevel(int lvl) {
+        Random r = new Random(lvl * 8675309L + 7L);
+
+        theme = (lvl - 1) % 4;
+        switch (theme) {
+            case 1: // sunset
+                skyTop = 0xFFFFA45C; skyBot = 0xFFFFE3A8;
+                dirtCol = 0xFF7A4A2A; grassCol = 0xFF9AA63A; moundCol = 0xFF6A4024;
+                rockCol = 0xFF9A7B66; hudDark = true; break;
+            case 2: // dusk / lavender
+                skyTop = 0xFF6A5AA8; skyBot = 0xFFC2A9D6;
+                dirtCol = 0xFF5A4630; grassCol = 0xFF6E8C44; moundCol = 0xFF4C3A28;
+                rockCol = 0xFF8A86A0; hudDark = true; break;
+            case 3: // night
+                skyTop = 0xFF141C44; skyBot = 0xFF38426E;
+                dirtCol = 0xFF45372A; grassCol = 0xFF3E6B2E; moundCol = 0xFF382C20;
+                rockCol = 0xFF5A6076; hudDark = false; break;
+            default: // day
+                skyTop = 0xFF7EC8E8; skyBot = 0xFFAEDDF2;
+                dirtCol = 0xFF8A5A33; grassCol = 0xFF5DA52E; moundCol = 0xFF7A4E2C;
+                rockCol = 0xFF9C9088; hudDark = true; break;
+        }
+        skyShader = new LinearGradient(0, 0, 0, groundY,
+                new int[]{skyTop, skyBot}, null, Shader.TileMode.CLAMP);
+
+        // ground height drifts a little level to level
+        groundY = baseGroundY + height * (r.nextFloat() - 0.5f) * 0.08f;
+
+        // doge slides between three lanes so it is never the same spot
+        float[] lanes = {0.30f, 0.5f, 0.70f};
+        dogeX = width * lanes[(lvl - 1) % 3];
+        dogeY = groundY - dogeR * 0.92f;
+        stingDist = dogeR * 0.98f;
+
+        // one to three hives, spread along the top, away from the doge
+        hives.clear();
+        int hiveN = 1 + (lvl >= 4 ? 1 : 0) + (lvl >= 9 ? 1 : 0);
+        for (int i = 0; i < hiveN; i++) {
+            float hx = width * (0.16f + 0.68f * (hiveN == 1 ? r.nextFloat()
+                    : i / (float) (hiveN - 1)));
+            float hy = height * (0.07f + r.nextFloat() * 0.05f);
+            if (Math.abs(hx - dogeX) < width * 0.18f) hx += width * 0.22f * (hx < dogeX ? -1 : 1);
+            hives.add(new float[]{Math.max(width * 0.12f, Math.min(width * 0.88f, hx)), hy});
+        }
+
+        // rock pillars appear from level 3: cover, chokepoints, anchors
+        rocks.clear();
+        if (lvl >= 3) {
+            int rockN = Math.min(1 + (lvl - 3) / 2, 4);
+            for (int i = 0; i < rockN; i++) {
+                for (int attempt = 0; attempt < 40; attempt++) {
+                    float rr = dogeR * (0.55f + r.nextFloat() * 0.7f);
+                    float rx = width * (0.12f + r.nextFloat() * 0.76f);
+                    float ry = groundY - rr * (r.nextBoolean() ? 0.2f : 1.6f);
+                    if (Math.hypot(rx - dogeX, ry - dogeY) < dogeR * 2.6f + rr) continue;
+                    boolean clear = true;
+                    for (int j = 0; j < rocks.size(); j++) {
+                        float[] o = rocks.get(j);
+                        if (Math.hypot(rx - o[0], ry - o[1]) < rr + o[2] + dogeR * 0.4f) {
+                            clear = false;
+                            break;
+                        }
+                    }
+                    if (clear) {
+                        rocks.add(new float[]{rx, ry, rr});
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     private void startLevel() {
         synchronized (lock) {
+            applyLevel(level);
+            maxStrokeOff = width * 0.06f;
             state = STATE_PLAY;
             strokes.clear();
             bees.clear();
@@ -188,8 +277,11 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
 
     private void spawnBee() {
         Bee b = new Bee();
-        b.x = hiveX + (rng.nextFloat() - 0.5f) * dogeR;
-        b.y = hiveY + dogeR * 0.4f;
+        float[] h = hives.isEmpty()
+                ? new float[]{width * 0.16f, height * 0.09f}
+                : hives.get(rng.nextInt(hives.size()));
+        b.x = h[0] + (rng.nextFloat() - 0.5f) * dogeR;
+        b.y = h[1] + dogeR * 0.4f;
         b.vx = (rng.nextFloat() - 0.5f) * beeSpeed();
         b.vy = beeSpeed() * 0.4f;
         b.phase = rng.nextFloat() * TAU;
@@ -269,12 +361,17 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             float bx = b.x + b.vx * dt;
             float by = b.y + b.vy * dt;
 
-            // collide with the drawn ink walls: slide along them
+            // collide with the drawn ink walls: bees slide along them, and
+            // each shove nudges the (springy) wall a little
+            float bspd = beeSpeed();
             for (int si = 0; si < strokes.size(); si++) {
-                ArrayList<float[]> pts = strokes.get(si).pts;
+                Stroke st = strokes.get(si);
+                ArrayList<float[]> pts = st.pts;
                 for (int p = 0; p + 1 < pts.size(); p++) {
                     float[] a = pts.get(p), c = pts.get(p + 1);
-                    float[] near = closest(bx, by, a[0], a[1], c[0], c[1]);
+                    float ax = a[0] + st.ox, ay = a[1] + st.oy;
+                    float cx2 = c[0] + st.ox, cy2 = c[1] + st.oy;
+                    float[] near = closest(bx, by, ax, ay, cx2, cy2);
                     float ndx = bx - near[0], ndy = by - near[1];
                     float nd = (float) Math.sqrt(ndx * ndx + ndy * ndy);
                     float minD = beeR + lineR;
@@ -287,7 +384,27 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                         if (vn < 0f) {
                             b.vx -= nx * vn;
                             b.vy -= ny * vn;
+                            st.ovx -= nx * bspd * STROKE_PUSH;
+                            st.ovy -= ny * bspd * STROKE_PUSH;
                         }
+                    }
+                }
+            }
+
+            // collide with rock pillars (solid, immovable)
+            for (int ri = 0; ri < rocks.size(); ri++) {
+                float[] rk = rocks.get(ri);
+                float ndx = bx - rk[0], ndy = by - rk[1];
+                float nd = (float) Math.sqrt(ndx * ndx + ndy * ndy);
+                float minD = beeR + rk[2];
+                if (nd < minD && nd > 0.0001f) {
+                    float nx = ndx / nd, ny = ndy / nd;
+                    bx += nx * (minD - nd);
+                    by += ny * (minD - nd);
+                    float vn = b.vx * nx + b.vy * ny;
+                    if (vn < 0f) {
+                        b.vx -= nx * vn;
+                        b.vy -= ny * vn;
                     }
                 }
             }
@@ -310,6 +427,25 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                     lose();
                     return;
                 }
+            }
+        }
+
+        // relax the pushed walls: a spring drags each stroke back to where
+        // it was drawn, damped, and capped so it can wobble and drift but
+        // never teleport
+        for (int si = 0; si < strokes.size(); si++) {
+            Stroke st = strokes.get(si);
+            if (st == active) continue; // the stroke under the finger is pinned
+            st.ovx += -st.ox * STROKE_SPRING * dt;
+            st.ovy += -st.oy * STROKE_SPRING * dt;
+            st.ovx *= (1f - STROKE_DAMP * dt);
+            st.ovy *= (1f - STROKE_DAMP * dt);
+            st.ox += st.ovx * dt;
+            st.oy += st.ovy * dt;
+            float off = (float) Math.sqrt(st.ox * st.ox + st.oy * st.oy);
+            if (off > maxStrokeOff) {
+                st.ox = st.ox / off * maxStrokeOff;
+                st.oy = st.oy / off * maxStrokeOff;
             }
         }
     }
@@ -436,6 +572,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
 
             drawClouds(c);
             drawGround(c);
+            drawRocks(c);
             drawHive(c);
             drawInk(c);
             drawDoge(c);
@@ -473,6 +610,28 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         } else {
             c.drawColor(0xFF8FD3F0);
         }
+        if (theme == 3) {
+            // night: a moon and a scatter of stars
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFFFDF6D0);
+            c.drawCircle(width * 0.80f, height * 0.13f, width * 0.07f, paint);
+            paint.setColor(skyTop);
+            c.drawCircle(width * 0.76f, height * 0.11f, width * 0.06f, paint);
+            for (int i = 0; i < 36; i++) {
+                float sx = (i * 421f + 37f) % width;
+                float sy = (i * 197f + 53f) % (groundY * 0.92f);
+                float tw = 0.5f + 0.5f * (float) Math.sin(menuT * 1.6f + i);
+                paint.setColor(Color.argb((int) (60 + 120 * tw), 255, 255, 255));
+                c.drawCircle(sx, sy, width * 0.0016f * (i % 4 == 0 ? 1.8f : 1f), paint);
+            }
+        } else if (theme == 1) {
+            // sunset: a low warm sun
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0x55FFE39A);
+            c.drawCircle(width * 0.5f, groundY - height * 0.02f, width * 0.26f, paint);
+            paint.setColor(0xFFFFE08A);
+            c.drawCircle(width * 0.5f, groundY - height * 0.02f, width * 0.14f, paint);
+        }
     }
 
     private void drawClouds(Canvas c) {
@@ -491,17 +650,16 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private void drawGround(Canvas c) {
         paint.setStyle(Paint.Style.FILL);
         // dirt
-        paint.setColor(0xFF8A5A33);
+        paint.setColor(dirtCol);
         c.drawRect(0, groundY, width, height, paint);
         // little dirt mound the doge sits on
-        paint.setColor(0xFF7A4E2C);
+        paint.setColor(moundCol);
         c.drawCircle(dogeX, groundY + dogeR * 0.6f, dogeR * 1.7f, paint);
         // grass lip with scalloped tufts
-        paint.setColor(0xFF5DA52E);
+        paint.setColor(grassCol);
         for (float gx = 0; gx < width + width * 0.045f; gx += width * 0.045f) {
             c.drawCircle(gx, groundY, width * 0.024f, paint);
         }
-        paint.setColor(0xFF7DC242);
         c.drawRect(0, groundY, width, groundY + height * 0.01f, paint);
         // faint texture ticks in the dirt
         paint.setColor(0x33000000);
@@ -516,48 +674,65 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawHive(Canvas c) {
-        paint.setStyle(Paint.Style.FILL);
-        float r = dogeR * 0.7f;
-        // string
-        paint.setColor(0xFF333333);
-        paint.setStrokeWidth(width * 0.006f);
-        c.drawLine(hiveX, 0, hiveX, hiveY - r * 0.8f, paint);
-        // stacked hive
-        paint.setColor(0xFFE6A93C);
-        for (int i = 0; i < 3; i++) {
-            float ry = hiveY + i * r * 0.5f;
-            c.drawRoundRect(hiveX - r * (1f - i * 0.12f), ry - r * 0.3f,
-                    hiveX + r * (1f - i * 0.12f), ry + r * 0.35f, r * 0.4f, r * 0.4f, paint);
+        float r = dogeR * 0.62f;
+        for (int hi = 0; hi < hives.size(); hi++) {
+            float hx = hives.get(hi)[0], hy = hives.get(hi)[1];
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setColor(0xFF333333);
+            paint.setStrokeWidth(width * 0.006f);
+            c.drawLine(hx, 0, hx, hy - r * 0.8f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFFE6A93C);
+            for (int i = 0; i < 3; i++) {
+                float ry = hy + i * r * 0.5f;
+                c.drawRoundRect(hx - r * (1f - i * 0.12f), ry - r * 0.3f,
+                        hx + r * (1f - i * 0.12f), ry + r * 0.35f, r * 0.4f, r * 0.4f, paint);
+            }
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setColor(0xFFC8862A);
+            for (int i = 0; i < 3; i++) {
+                float ry = hy + i * r * 0.5f - r * 0.05f;
+                c.drawLine(hx - r * 0.9f, ry, hx + r * 0.9f, ry, paint);
+            }
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFF3A2410);
+            c.drawCircle(hx, hy + r * 0.55f, r * 0.28f, paint);
         }
-        paint.setColor(0xFFC8862A);
-        for (int i = 0; i < 3; i++) {
-            float ry = hiveY + i * r * 0.5f - r * 0.05f;
-            c.drawLine(hiveX - r * 0.9f, ry, hiveX + r * 0.9f, ry, paint);
-        }
-        // entrance hole
-        paint.setColor(0xFF3A2410);
-        c.drawCircle(hiveX, hiveY + r * 0.55f, r * 0.28f, paint);
     }
 
     private void drawInk(Canvas c) {
         inkPaint.setStrokeWidth(lineR * 2f);
         for (int si = 0; si < strokes.size(); si++) {
-            ArrayList<float[]> pts = strokes.get(si).pts;
+            Stroke st = strokes.get(si);
+            ArrayList<float[]> pts = st.pts;
             if (pts.size() == 1) {
                 float[] a = pts.get(0);
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(0xFF1A1A1A);
-                c.drawCircle(a[0], a[1], lineR, paint);
+                c.drawCircle(a[0] + st.ox, a[1] + st.oy, lineR, paint);
                 continue;
             }
             tmpPath.reset();
             float[] a0 = pts.get(0);
-            tmpPath.moveTo(a0[0], a0[1]);
+            tmpPath.moveTo(a0[0] + st.ox, a0[1] + st.oy);
             for (int p = 1; p < pts.size(); p++) {
                 float[] a = pts.get(p);
-                tmpPath.lineTo(a[0], a[1]);
+                tmpPath.lineTo(a[0] + st.ox, a[1] + st.oy);
             }
             c.drawPath(tmpPath, inkPaint);
+        }
+    }
+
+    private void drawRocks(Canvas c) {
+        paint.setStyle(Paint.Style.FILL);
+        for (int i = 0; i < rocks.size(); i++) {
+            float[] rk = rocks.get(i);
+            paint.setColor(rockCol);
+            c.drawCircle(rk[0], rk[1], rk[2], paint);
+            paint.setColor((rockCol & 0xFFFEFEFE) >>> 1 | 0xFF000000); // darker base
+            c.drawCircle(rk[0] + rk[2] * 0.22f, rk[1] + rk[2] * 0.22f, rk[2] * 0.78f, paint);
+            paint.setColor(0x33FFFFFF);
+            c.drawCircle(rk[0] - rk[2] * 0.3f, rk[1] - rk[2] * 0.32f, rk[2] * 0.3f, paint);
         }
     }
 
@@ -732,12 +907,14 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawHud(Canvas c) {
+        int strong = hudDark ? 0xFF1A1A1A : 0xFFFFFFFF;
+        int soft = hudDark ? 0x99000000 : 0xCCFFFFFF;
         // timer
-        textPaint.setColor(0xFF1A1A1A);
+        textPaint.setColor(strong);
         textPaint.setTextSize(width * 0.11f);
         c.drawText(String.valueOf((int) Math.ceil(timeLeft)), width / 2f, height * 0.10f, textPaint);
         textPaint.setTextSize(width * 0.032f);
-        textPaint.setColor(0x99000000);
+        textPaint.setColor(soft);
         c.drawText("LEVEL " + level, width / 2f, height * 0.135f, textPaint);
 
         // ink bar
@@ -751,7 +928,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         c.drawRoundRect(bx, by, bx + bw * k, by + height * 0.012f,
                 height * 0.006f, height * 0.006f, paint);
         textPaint.setTextSize(width * 0.026f);
-        textPaint.setColor(0x99000000);
+        textPaint.setColor(soft);
         c.drawText(outOfInk ? "OUT OF INK — tap CLEAR to redraw" : "INK",
                 width / 2f, by - height * 0.006f, textPaint);
 
@@ -772,7 +949,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             // nothing
         } else if (timeLeft > surviveTime - 2.2f) {
             textPaint.setTextSize(width * 0.04f);
-            textPaint.setColor(0xCC000000);
+            textPaint.setColor(soft);
             c.drawText("draw a wall to shield the doge!", width / 2f, height * 0.78f, textPaint);
         }
     }
@@ -895,17 +1072,12 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         synchronized (lock) {
             width = w;
             height = hpx;
-            groundY = hpx * 0.74f;
+            baseGroundY = hpx * 0.74f;
+            groundY = baseGroundY;
             dogeR = w * 0.085f;
-            dogeX = w * 0.5f;
-            dogeY = groundY - dogeR * 0.92f;   // sitting on the ground
-            stingDist = dogeR * 0.98f;
             beeR = w * 0.019f;
             lineR = w * 0.013f;
-            hiveX = w * 0.16f;
-            hiveY = hpx * 0.09f;
-            skyShader = new LinearGradient(0, 0, 0, groundY,
-                    new int[]{0xFF7EC8E8, 0xFFA9DDF2}, null, Shader.TileMode.CLAMP);
+            maxStrokeOff = w * 0.06f;
             clouds.clear();
             for (int i = 0; i < 4; i++) {
                 Cloud cl = new Cloud();
@@ -915,6 +1087,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 cl.spd = w * (0.01f + rng.nextFloat() * 0.02f);
                 clouds.add(cl);
             }
+            applyLevel(level);  // lay out doge / hives / rocks / palette
         }
     }
 
