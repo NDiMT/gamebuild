@@ -36,10 +36,12 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private static final float TAU = (float) (Math.PI * 2.0);
     private static final int SUBSTEPS = 3;
 
-    // pushable-wall physics: bees nudge your ink, a spring pulls it back
-    private static final float STROKE_PUSH = 0.022f;
-    private static final float STROKE_SPRING = 9f;
-    private static final float STROKE_DAMP = 4f;
+    // pushable-wall physics: bees bounce off your ink and shove it; a
+    // springy, lightly-damped return makes it wobble instead of sticking
+    private static final float STROKE_PUSH = 0.060f;
+    private static final float STROKE_SPRING = 11f;
+    private static final float STROKE_DAMP = 2.6f;
+    private static final float BEE_BOUNCE = 0.65f;   // restitution off walls
 
     private final SurfaceHolder holder;
     private final Object lock = new Object();
@@ -195,28 +197,31 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             hives.add(new float[]{Math.max(width * 0.12f, Math.min(width * 0.88f, hx)), hy});
         }
 
-        // rock pillars appear from level 3: cover, chokepoints, anchors
+        // big floating earth chunks (like the ad): grass-topped landmasses
+        // the bees bounce off. {x, y, r, grass-direction}
         rocks.clear();
-        if (lvl >= 3) {
-            int rockN = Math.min(1 + (lvl - 3) / 2, 4);
-            for (int i = 0; i < rockN; i++) {
-                for (int attempt = 0; attempt < 40; attempt++) {
-                    float rr = dogeR * (0.55f + r.nextFloat() * 0.7f);
-                    float rx = width * (0.12f + r.nextFloat() * 0.76f);
-                    float ry = groundY - rr * (r.nextBoolean() ? 0.2f : 1.6f);
-                    if (Math.hypot(rx - dogeX, ry - dogeY) < dogeR * 2.6f + rr) continue;
-                    boolean clear = true;
-                    for (int j = 0; j < rocks.size(); j++) {
-                        float[] o = rocks.get(j);
-                        if (Math.hypot(rx - o[0], ry - o[1]) < rr + o[2] + dogeR * 0.4f) {
-                            clear = false;
-                            break;
-                        }
+        int earthN = 1 + (lvl >= 2 ? 1 : 0) + (lvl >= 5 ? 1 : 0) + (lvl >= 9 ? 1 : 0);
+        float[] dirs = {-1.571f, -0.4f, -2.74f}; // up, up-right, up-left
+        for (int i = 0; i < earthN; i++) {
+            for (int attempt = 0; attempt < 50; attempt++) {
+                float rr = dogeR * (1.0f + r.nextFloat() * 1.05f);
+                float rx = width * (0.16f + r.nextFloat() * 0.68f);
+                float ry = height * (0.17f + r.nextFloat() * 0.33f);
+                if (Math.hypot(rx - dogeX, ry - dogeY) < dogeR * 2.2f + rr) continue;
+                boolean clear = true;
+                for (int j = 0; j < hives.size(); j++) {
+                    if (Math.hypot(rx - hives.get(j)[0], ry - hives.get(j)[1])
+                            < rr + dogeR * 0.9f) { clear = false; break; }
+                }
+                for (int j = 0; clear && j < rocks.size(); j++) {
+                    float[] o = rocks.get(j);
+                    if (Math.hypot(rx - o[0], ry - o[1]) < rr + o[2] + dogeR * 0.5f) {
+                        clear = false;
                     }
-                    if (clear) {
-                        rocks.add(new float[]{rx, ry, rr});
-                        break;
-                    }
+                }
+                if (clear) {
+                    rocks.add(new float[]{rx, ry, rr, dirs[i % dirs.length]});
+                    break;
                 }
             }
         }
@@ -382,8 +387,10 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                         by += ny * push;
                         float vn = b.vx * nx + b.vy * ny;
                         if (vn < 0f) {
-                            b.vx -= nx * vn;
-                            b.vy -= ny * vn;
+                            // bounce the bee back off the wall...
+                            b.vx -= nx * (1f + BEE_BOUNCE) * vn;
+                            b.vy -= ny * (1f + BEE_BOUNCE) * vn;
+                            // ...and kick the springy wall the other way
                             st.ovx -= nx * bspd * STROKE_PUSH;
                             st.ovy -= ny * bspd * STROKE_PUSH;
                         }
@@ -391,7 +398,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 }
             }
 
-            // collide with rock pillars (solid, immovable)
+            // collide with the floating earth chunks (solid, bouncy)
             for (int ri = 0; ri < rocks.size(); ri++) {
                 float[] rk = rocks.get(ri);
                 float ndx = bx - rk[0], ndy = by - rk[1];
@@ -403,14 +410,17 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                     by += ny * (minD - nd);
                     float vn = b.vx * nx + b.vy * ny;
                     if (vn < 0f) {
-                        b.vx -= nx * vn;
-                        b.vy -= ny * vn;
+                        b.vx -= nx * (1f + BEE_BOUNCE) * vn;
+                        b.vy -= ny * (1f + BEE_BOUNCE) * vn;
                     }
                 }
             }
 
-            // the ground is solid: bees can't burrow under the doge
-            if (by > groundY - beeR) { by = groundY - beeR; b.vy = -Math.abs(b.vy) * 0.6f; }
+            // the ground is solid: bees bounce off it, never sink through
+            if (by > groundY - beeR) {
+                by = groundY - beeR;
+                if (b.vy > 0f) b.vy = -b.vy * BEE_BOUNCE;
+            }
             // keep bees on screen so they keep pressing
             if (bx < beeR) { bx = beeR; b.vx = Math.abs(b.vx); }
             if (bx > width - beeR) { bx = width - beeR; b.vx = -Math.abs(b.vx); }
@@ -440,12 +450,24 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             st.ovy += -st.oy * STROKE_SPRING * dt;
             st.ovx *= (1f - STROKE_DAMP * dt);
             st.ovy *= (1f - STROKE_DAMP * dt);
+            float sv = (float) Math.sqrt(st.ovx * st.ovx + st.ovy * st.ovy);
+            float maxSv = beeSpeed() * 1.4f;
+            if (sv > maxSv) {
+                st.ovx = st.ovx / sv * maxSv;
+                st.ovy = st.ovy / sv * maxSv;
+            }
             st.ox += st.ovx * dt;
             st.oy += st.ovy * dt;
             float off = (float) Math.sqrt(st.ox * st.ox + st.oy * st.oy);
             if (off > maxStrokeOff) {
                 st.ox = st.ox / off * maxStrokeOff;
                 st.oy = st.oy / off * maxStrokeOff;
+                // kill outward velocity at the cap so it doesn't buzz
+                float vn = (st.ovx * st.ox + st.ovy * st.oy) / off;
+                if (vn > 0f) {
+                    st.ovx -= st.ox / off * vn;
+                    st.ovy -= st.oy / off * vn;
+                }
             }
         }
     }
@@ -572,7 +594,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
 
             drawClouds(c);
             drawGround(c);
-            drawRocks(c);
+            drawEarth(c);
             drawHive(c);
             drawInk(c);
             drawDoge(c);
@@ -723,16 +745,44 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         }
     }
 
-    private void drawRocks(Canvas c) {
+    private void drawEarth(Canvas c) {
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < rocks.size(); i++) {
             float[] rk = rocks.get(i);
-            paint.setColor(rockCol);
-            c.drawCircle(rk[0], rk[1], rk[2], paint);
-            paint.setColor((rockCol & 0xFFFEFEFE) >>> 1 | 0xFF000000); // darker base
-            c.drawCircle(rk[0] + rk[2] * 0.22f, rk[1] + rk[2] * 0.22f, rk[2] * 0.78f, paint);
-            paint.setColor(0x33FFFFFF);
-            c.drawCircle(rk[0] - rk[2] * 0.3f, rk[1] - rk[2] * 0.32f, rk[2] * 0.3f, paint);
+            float x = rk[0], y = rk[1], r = rk[2];
+            float g = rk.length > 3 ? rk[3] : -1.571f;
+            // bold dark outline (the cartoon look)
+            paint.setColor(0xFF221608);
+            c.drawCircle(x, y, r * 1.05f, paint);
+            // dirt body + soft lower shading
+            paint.setColor(dirtCol);
+            c.drawCircle(x, y, r, paint);
+            paint.setColor(0x26000000);
+            c.drawCircle(x + r * 0.20f, y + r * 0.22f, r * 0.82f, paint);
+            // a few doodle "tick" marks in the soil
+            paint.setColor(0x55000000);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(r * 0.03f);
+            for (int t = 0; t < 3; t++) {
+                float ta = g + 1.8f + t * 0.7f;
+                float tx = x + (float) Math.cos(ta) * r * 0.55f;
+                float ty = y + (float) Math.sin(ta) * r * 0.55f;
+                c.drawLine(tx, ty, tx + r * 0.12f, ty - r * 0.06f, paint);
+            }
+            paint.setStyle(Paint.Style.FILL);
+            // scalloped grass strip along the chosen rim
+            paint.setColor(grassCol);
+            int tufts = 13;
+            for (int k = 0; k < tufts; k++) {
+                float ang = g - 0.95f + (1.9f) * k / (tufts - 1);
+                float gx = x + (float) Math.cos(ang) * r;
+                float gy = y + (float) Math.sin(ang) * r;
+                c.drawCircle(gx, gy, r * 0.17f, paint);
+                // inner fill so the grass reads as a thick band, not dots
+                float gx2 = x + (float) Math.cos(ang) * r * 0.86f;
+                float gy2 = y + (float) Math.sin(ang) * r * 0.86f;
+                c.drawCircle(gx2, gy2, r * 0.14f, paint);
+            }
         }
     }
 
