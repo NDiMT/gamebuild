@@ -60,7 +60,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private float dogeX, dogeY, dogeR, stingDist;
     private float beeR, lineR;
     private float baseGroundY;
-    private float pitX, pitRx, pitRy;     // the bowl the doge sits in
+    private float pitX, pitRx, pitDepth, pitOpenHW;   // the bowl the doge sits in
+    private int pitShape;
     private float clockX, clockY;         // alarm-clock timer position
 
     // per-level layout
@@ -184,17 +185,18 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         // ground height drifts a little level to level
         groundY = baseGroundY + height * (r.nextFloat() - 0.5f) * 0.08f;
 
-        // doge slides between three lanes so it is never the same spot,
-        // and sits at the bottom of a dug-out bowl
-        float[] lanes = {0.32f, 0.5f, 0.68f};
-        dogeX = width * lanes[(lvl - 1) % 3];
+        // the doge always sits dead-centre on the floor of a big dug-out pit;
+        // the pit's silhouette changes shape every level
+        dogeX = width * 0.5f;
         pitX = dogeX;
-        pitRx = dogeR * 2.2f;
-        pitRy = dogeR * 2.9f;
-        dogeY = groundY + pitRy * 0.52f;
+        pitShape = (lvl - 1) % 4;
+        pitRx = dogeR * (2.7f + (pitShape == 3 ? 0.5f : 0f));
+        pitDepth = dogeR * (3.6f + (pitShape == 1 ? 1.0f : 0f));
+        pitOpenHW = halfWidth(0f);
+        dogeY = groundY + pitDepth * 0.62f;
         stingDist = dogeR * 0.98f;
-        // the alarm-clock timer perches on a ledge opposite the doge
-        clockX = dogeX < width * 0.5f ? width * 0.84f : width * 0.16f;
+        // the alarm-clock timer perches on the flat ground to the left
+        clockX = width * 0.12f;
         clockY = groundY - dogeR * 0.42f;
 
         // one to three hives, spread along the top, away from the doge
@@ -236,6 +238,49 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 }
             }
         }
+    }
+
+    /** Half-width of the pit cavity at a depth relY below the surface; the
+     *  silhouette differs per pitShape so every level digs a different hole. */
+    private float halfWidth(float relY) {
+        float t = relY / pitDepth;
+        if (t < 0f) t = 0f;
+        if (t > 1f) t = 1f;
+        switch (pitShape) {
+            case 1: { // narrow well, rounded at the bottom
+                float w = pitRx * 0.5f;
+                if (t < 0.82f) return w;
+                float u = (t - 0.82f) / 0.18f;
+                return w * (float) Math.sqrt(Math.max(0f, 1f - u * u));
+            }
+            case 2: { // flask: narrow neck opening into a round belly
+                if (t < 0.42f) return pitRx * (0.36f + 0.64f * (t / 0.42f));
+                float u = (t - 0.42f) / 0.58f;
+                return pitRx * (float) Math.sqrt(Math.max(0f, 1f - u * u));
+            }
+            case 3: // wide shallow basin
+                return pitRx * 1.04f * (float) Math.sqrt(Math.max(0f, 1f - t * t));
+            default: // round bowl, gently flattened bottom
+                return pitRx * (float) Math.sqrt(Math.max(0f, 1f - 0.92f * t * t));
+        }
+    }
+
+    /** True where ink may not be drawn: on/under the doge or inside dirt. */
+    private boolean isSolid(float x, float y) {
+        if (y > dogeY) {
+            return true;  // never draw at or under the doge
+        }
+        if (Math.hypot(x - dogeX, y - dogeY) < dogeR * 1.05f) {
+            return true;
+        }
+        if (y > groundY) {
+            float relY = y - groundY;
+            float hw = relY <= pitDepth ? halfWidth(relY) : 0f;
+            if (Math.abs(x - pitX) > hw) {
+                return true; // buried in the dirt walls
+            }
+        }
+        return false;
     }
 
     private void startLevel() {
@@ -427,32 +472,30 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 }
             }
 
-            // the ground is solid except for the doge's bowl: bees bounce
-            // off the dirt shoulders and can only get in through the opening,
-            // sliding around the inside of the bowl
+            // the ground is solid except for the doge's pit: bees bounce off
+            // the dirt shoulders and can only get in through the mouth, then
+            // slide down the pit's walls
             if (by > groundY - beeR) {
-                float relX = bx - pitX, relY = by - groundY;
-                if (Math.abs(relX) < pitRx - beeR) {
-                    float ex = relX / pitRx, ey = relY / pitRy;
-                    float e = ex * ex + ey * ey;
-                    if (e > 1f) {
-                        float s = 1f / (float) Math.sqrt(e);
-                        float bxp = pitX + relX * s, byp = groundY + relY * s;
-                        float nx = bx - bxp, ny = by - byp;
-                        float nl = (float) Math.sqrt(nx * nx + ny * ny);
-                        if (nl > 0.0001f) {
-                            nx /= nl; ny /= nl;
-                            bx = bxp; by = byp;
-                            float vn = b.vx * nx + b.vy * ny;
-                            if (vn > 0f) {
-                                b.vx -= (1f + BEE_BOUNCE) * vn * nx;
-                                b.vy -= (1f + BEE_BOUNCE) * vn * ny;
-                            }
-                        }
-                    }
-                } else {
+                boolean overMouth = Math.abs(bx - pitX) < pitOpenHW;
+                if (!overMouth) {
                     by = groundY - beeR;
                     if (b.vy > 0f) b.vy = -b.vy * BEE_BOUNCE;
+                } else {
+                    float relY = by - groundY;
+                    if (relY > pitDepth - beeR) {
+                        by = groundY + pitDepth - beeR;
+                        if (b.vy > 0f) b.vy = -b.vy * BEE_BOUNCE;
+                        relY = by - groundY;
+                    }
+                    float hw = halfWidth(Math.max(0f, relY)) - beeR;
+                    if (hw < 0f) hw = 0f;
+                    if (bx < pitX - hw) {
+                        bx = pitX - hw;
+                        if (b.vx < 0f) b.vx = -b.vx * BEE_BOUNCE;
+                    } else if (bx > pitX + hw) {
+                        bx = pitX + hw;
+                        if (b.vx > 0f) b.vx = -b.vx * BEE_BOUNCE;
+                    }
                 }
             }
             // keep bees on screen so they keep pressing
@@ -575,8 +618,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             sfx.play(SoundFx.CLEAR);
             return;
         }
-        if (state != STATE_PLAY || inkUsed >= inkTotal) {
-            return;
+        if (state != STATE_PLAY || inkUsed >= inkTotal || isSolid(x, y)) {
+            return;  // can't start a line on the doge or in the dirt
         }
         active = new Stroke();
         active.pts.add(new float[]{x, y});
@@ -588,6 +631,11 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
 
     private void touchMove(float x, float y) {
         if (active == null) {
+            return;
+        }
+        if (isSolid(x, y)) {
+            // entering the doge / dirt ends the stroke instead of cutting through
+            active = null;
             return;
         }
         float dx = x - lastPx, dy = y - lastPy;
@@ -763,34 +811,35 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             float ty = groundY + height * (0.05f + (i % 4) * 0.045f);
             c.drawLine(tx, ty, tx + width * 0.02f, ty - width * 0.01f, paint);
         }
-        // the doge's bowl, carved out and filled with sky
+        // the doge's pit, carved out from the profile and filled with sky
+        int steps = 26;
+        tmpPath.reset();
+        tmpPath.moveTo(pitX - halfWidth(0f), groundY);
+        for (int i = 1; i <= steps; i++) {            // down the left wall
+            float ry = pitDepth * i / steps;
+            tmpPath.lineTo(pitX - halfWidth(ry), groundY + ry);
+        }
+        for (int i = steps; i >= 0; i--) {            // up the right wall
+            float ry = pitDepth * i / steps;
+            tmpPath.lineTo(pitX + halfWidth(ry), groundY + ry);
+        }
+        tmpPath.close();
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(skyBot);
-        c.drawOval(pitX - pitRx, groundY - pitRx * 0.12f,
-                pitX + pitRx, groundY + pitRy, paint);
-        // dark rim around the bowl so it reads as a hole
+        c.drawPath(tmpPath, paint);
+        // dark rim so it reads as a dug hole
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(width * 0.006f);
         paint.setColor(0x33000000);
-        c.drawOval(pitX - pitRx, groundY - pitRx * 0.12f,
-                pitX + pitRx, groundY + pitRy, paint);
-        // grass lip with scalloped tufts, skipping the bowl mouth
+        c.drawPath(tmpPath, paint);
+
+        // grass lip with scalloped tufts, skipping the pit mouth
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(grassCol);
         float tuft = width * 0.026f;
         for (float gx = 0; gx < width + tuft; gx += width * 0.045f) {
-            if (Math.abs(gx - pitX) < pitRx - tuft) continue;
+            if (Math.abs(gx - pitX) < pitOpenHW - tuft * 0.4f) continue;
             c.drawCircle(gx, groundY, tuft, paint);
-        }
-        // grass also curls a little way down each side of the mouth
-        for (int s = -1; s <= 1; s += 2) {
-            for (int i = 0; i < 4; i++) {
-                float a = (float) (Math.PI * 0.5 + s * (0.18 + i * 0.18));
-                float gx = pitX + (float) Math.cos(a) * pitRx * (s < 0 ? 1 : 1);
-                float gy = groundY + (float) Math.sin(a) * pitRy * 0.5f;
-                float ex = pitX + s * pitRx - s * tuft * 0.4f;
-                c.drawCircle(ex, groundY + i * tuft * 1.3f, tuft * (1f - i * 0.12f), paint);
-            }
         }
     }
 
