@@ -43,6 +43,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private static final float STROKE_SPRING = 3.0f;
     private static final float STROKE_DAMP = 1.6f;
     private static final float BEE_BOUNCE = 0.82f;   // restitution off walls
+    private static final float INK_BOUNCE = 0.45f;    // ink rebound off solids
 
     private final SurfaceHolder holder;
     private final Object lock = new Object();
@@ -501,6 +502,52 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                     st.ovx -= st.ox / off * vn;
                     st.ovy -= st.oy / off * vn;
                 }
+            }
+            // the ink is solid too: it can't slide through the doge or the
+            // earth chunks, it bounces off them
+            resolveStrokeVsCircle(st, dogeX, dogeY, dogeR);
+            for (int ri = 0; ri < rocks.size(); ri++) {
+                float[] rk = rocks.get(ri);
+                resolveStrokeVsCircle(st, rk[0], rk[1], rk[2]);
+            }
+        }
+    }
+
+    /** Pushes a whole stroke out of a solid circle and bounces its velocity. */
+    private void resolveStrokeVsCircle(Stroke st, float cx, float cy, float cr) {
+        ArrayList<float[]> pts = st.pts;
+        if (pts.isEmpty()) {
+            return;
+        }
+        float rad = cr + lineR;
+        float minD = Float.MAX_VALUE;
+        float nearX = 0f, nearY = 0f;
+        if (pts.size() == 1) {
+            float px = pts.get(0)[0] + st.ox, py = pts.get(0)[1] + st.oy;
+            minD = (float) Math.hypot(px - cx, py - cy);
+            nearX = px; nearY = py;
+        } else {
+            for (int p = 0; p + 1 < pts.size(); p++) {
+                float[] a = pts.get(p), b = pts.get(p + 1);
+                float[] np = closest(cx, cy, a[0] + st.ox, a[1] + st.oy,
+                        b[0] + st.ox, b[1] + st.oy);
+                float d = (float) Math.hypot(np[0] - cx, np[1] - cy);
+                if (d < minD) {
+                    minD = d;
+                    nearX = np[0];
+                    nearY = np[1];
+                }
+            }
+        }
+        if (minD < rad && minD > 0.0001f) {
+            float nx = (nearX - cx) / minD, ny = (nearY - cy) / minD;
+            float pen = rad - minD;
+            st.ox += nx * pen;
+            st.oy += ny * pen;
+            float vn = st.ovx * nx + st.ovy * ny;
+            if (vn < 0f) {
+                st.ovx -= (1f + INK_BOUNCE) * vn * nx;
+                st.ovy -= (1f + INK_BOUNCE) * vn * ny;
             }
         }
     }
