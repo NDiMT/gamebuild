@@ -36,12 +36,13 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private static final float TAU = (float) (Math.PI * 2.0);
     private static final int SUBSTEPS = 3;
 
-    // pushable-wall physics: bees bounce off your ink and shove it; a
-    // springy, lightly-damped return makes it wobble instead of sticking
-    private static final float STROKE_PUSH = 0.060f;
-    private static final float STROKE_SPRING = 11f;
-    private static final float STROKE_DAMP = 2.6f;
-    private static final float BEE_BOUNCE = 0.65f;   // restitution off walls
+    // pushable-wall physics: the swarm can genuinely heave your ink around
+    // and even lift it off the doge; a weak spring eases it back when they
+    // let go, so a badly-braced wall gets carried away
+    private static final float STROKE_PUSH = 0.16f;
+    private static final float STROKE_SPRING = 3.0f;
+    private static final float STROKE_DAMP = 1.6f;
+    private static final float BEE_BOUNCE = 0.82f;   // restitution off walls
 
     private final SurfaceHolder holder;
     private final Object lock = new Object();
@@ -58,6 +59,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private float dogeX, dogeY, dogeR, stingDist;
     private float beeR, lineR;
     private float baseGroundY;
+    private float pitX, pitRx, pitRy;     // the bowl the doge sits in
+    private float clockX, clockY;         // alarm-clock timer position
 
     // per-level layout
     private int theme;
@@ -180,11 +183,18 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         // ground height drifts a little level to level
         groundY = baseGroundY + height * (r.nextFloat() - 0.5f) * 0.08f;
 
-        // doge slides between three lanes so it is never the same spot
-        float[] lanes = {0.30f, 0.5f, 0.70f};
+        // doge slides between three lanes so it is never the same spot,
+        // and sits at the bottom of a dug-out bowl
+        float[] lanes = {0.32f, 0.5f, 0.68f};
         dogeX = width * lanes[(lvl - 1) % 3];
-        dogeY = groundY - dogeR * 0.92f;
+        pitX = dogeX;
+        pitRx = dogeR * 2.2f;
+        pitRy = dogeR * 2.9f;
+        dogeY = groundY + pitRy * 0.52f;
         stingDist = dogeR * 0.98f;
+        // the alarm-clock timer perches on a ledge opposite the doge
+        clockX = dogeX < width * 0.5f ? width * 0.84f : width * 0.16f;
+        clockY = groundY - dogeR * 0.42f;
 
         // one to three hives, spread along the top, away from the doge
         hives.clear();
@@ -230,7 +240,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private void startLevel() {
         synchronized (lock) {
             applyLevel(level);
-            maxStrokeOff = width * 0.06f;
+            maxStrokeOff = width * 0.32f;
             state = STATE_PLAY;
             strokes.clear();
             bees.clear();
@@ -416,10 +426,33 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
                 }
             }
 
-            // the ground is solid: bees bounce off it, never sink through
+            // the ground is solid except for the doge's bowl: bees bounce
+            // off the dirt shoulders and can only get in through the opening,
+            // sliding around the inside of the bowl
             if (by > groundY - beeR) {
-                by = groundY - beeR;
-                if (b.vy > 0f) b.vy = -b.vy * BEE_BOUNCE;
+                float relX = bx - pitX, relY = by - groundY;
+                if (Math.abs(relX) < pitRx - beeR) {
+                    float ex = relX / pitRx, ey = relY / pitRy;
+                    float e = ex * ex + ey * ey;
+                    if (e > 1f) {
+                        float s = 1f / (float) Math.sqrt(e);
+                        float bxp = pitX + relX * s, byp = groundY + relY * s;
+                        float nx = bx - bxp, ny = by - byp;
+                        float nl = (float) Math.sqrt(nx * nx + ny * ny);
+                        if (nl > 0.0001f) {
+                            nx /= nl; ny /= nl;
+                            bx = bxp; by = byp;
+                            float vn = b.vx * nx + b.vy * ny;
+                            if (vn > 0f) {
+                                b.vx -= (1f + BEE_BOUNCE) * vn * nx;
+                                b.vy -= (1f + BEE_BOUNCE) * vn * ny;
+                            }
+                        }
+                    }
+                } else {
+                    by = groundY - beeR;
+                    if (b.vy > 0f) b.vy = -b.vy * BEE_BOUNCE;
+                }
             }
             // keep bees on screen so they keep pressing
             if (bx < beeR) { bx = beeR; b.vx = Math.abs(b.vx); }
@@ -674,25 +707,75 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         // dirt
         paint.setColor(dirtCol);
         c.drawRect(0, groundY, width, height, paint);
-        // little dirt mound the doge sits on
-        paint.setColor(moundCol);
-        c.drawCircle(dogeX, groundY + dogeR * 0.6f, dogeR * 1.7f, paint);
-        // grass lip with scalloped tufts
-        paint.setColor(grassCol);
-        for (float gx = 0; gx < width + width * 0.045f; gx += width * 0.045f) {
-            c.drawCircle(gx, groundY, width * 0.024f, paint);
-        }
-        c.drawRect(0, groundY, width, groundY + height * 0.01f, paint);
         // faint texture ticks in the dirt
         paint.setColor(0x33000000);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(width * 0.003f);
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 12; i++) {
             float tx = (i * 521f % width);
-            float ty = groundY + height * (0.05f + (i % 4) * 0.04f);
+            float ty = groundY + height * (0.05f + (i % 4) * 0.045f);
             c.drawLine(tx, ty, tx + width * 0.02f, ty - width * 0.01f, paint);
         }
+        // the doge's bowl, carved out and filled with sky
         paint.setStyle(Paint.Style.FILL);
+        paint.setColor(skyBot);
+        c.drawOval(pitX - pitRx, groundY - pitRx * 0.12f,
+                pitX + pitRx, groundY + pitRy, paint);
+        // dark rim around the bowl so it reads as a hole
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(width * 0.006f);
+        paint.setColor(0x33000000);
+        c.drawOval(pitX - pitRx, groundY - pitRx * 0.12f,
+                pitX + pitRx, groundY + pitRy, paint);
+        // grass lip with scalloped tufts, skipping the bowl mouth
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(grassCol);
+        float tuft = width * 0.026f;
+        for (float gx = 0; gx < width + tuft; gx += width * 0.045f) {
+            if (Math.abs(gx - pitX) < pitRx - tuft) continue;
+            c.drawCircle(gx, groundY, tuft, paint);
+        }
+        // grass also curls a little way down each side of the mouth
+        for (int s = -1; s <= 1; s += 2) {
+            for (int i = 0; i < 4; i++) {
+                float a = (float) (Math.PI * 0.5 + s * (0.18 + i * 0.18));
+                float gx = pitX + (float) Math.cos(a) * pitRx * (s < 0 ? 1 : 1);
+                float gy = groundY + (float) Math.sin(a) * pitRy * 0.5f;
+                float ex = pitX + s * pitRx - s * tuft * 0.4f;
+                c.drawCircle(ex, groundY + i * tuft * 1.3f, tuft * (1f - i * 0.12f), paint);
+            }
+        }
+    }
+
+    private void drawClock(Canvas c) {
+        float r = dogeR * 0.62f;
+        float cx = clockX, cy = clockY - r;
+        // legs
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(r * 0.14f);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setColor(0xFF3A2A18);
+        c.drawLine(cx - r * 0.5f, cy + r * 0.85f, cx - r * 0.8f, cy + r * 1.2f, paint);
+        c.drawLine(cx + r * 0.5f, cy + r * 0.85f, cx + r * 0.8f, cy + r * 1.2f, paint);
+        // bells
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFFE7533B);
+        c.drawCircle(cx - r * 0.62f, cy - r * 0.72f, r * 0.32f, paint);
+        c.drawCircle(cx + r * 0.62f, cy - r * 0.72f, r * 0.32f, paint);
+        paint.setColor(0xFF3A2A18);
+        c.drawLine(cx, cy, cx, cy, paint);
+        // body
+        paint.setColor(0xFFE7533B);
+        c.drawCircle(cx, cy, r, paint);
+        paint.setColor(0xFFFFF4E0);
+        c.drawCircle(cx, cy, r * 0.78f, paint);
+        // number
+        boolean urgent = timeLeft <= 3.5f;
+        textPaint.setColor(urgent ? 0xFFD13030 : 0xFF2A2018);
+        textPaint.setTextSize(r * 1.1f);
+        float n = (float) Math.ceil(Math.max(0, timeLeft));
+        c.drawText(String.valueOf((int) n), cx,
+                cy - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint);
     }
 
     private void drawHive(Canvas c) {
@@ -959,13 +1042,11 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
     private void drawHud(Canvas c) {
         int strong = hudDark ? 0xFF1A1A1A : 0xFFFFFFFF;
         int soft = hudDark ? 0x99000000 : 0xCCFFFFFF;
-        // timer
+        // the alarm clock is the timer
+        drawClock(c);
         textPaint.setColor(strong);
-        textPaint.setTextSize(width * 0.11f);
-        c.drawText(String.valueOf((int) Math.ceil(timeLeft)), width / 2f, height * 0.10f, textPaint);
-        textPaint.setTextSize(width * 0.032f);
-        textPaint.setColor(soft);
-        c.drawText("LEVEL " + level, width / 2f, height * 0.135f, textPaint);
+        textPaint.setTextSize(width * 0.05f);
+        c.drawText("LEVEL " + level, width / 2f, height * 0.075f, textPaint);
 
         // ink bar
         float bw = width * 0.5f, bx = width / 2f - bw / 2f, by = height * 0.16f;
@@ -1000,7 +1081,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
         } else if (timeLeft > surviveTime - 2.2f) {
             textPaint.setTextSize(width * 0.04f);
             textPaint.setColor(soft);
-            c.drawText("draw a wall to shield the doge!", width / 2f, height * 0.78f, textPaint);
+            c.drawText("draw a lid over the pit — brace it well!",
+                    width / 2f, height * 0.30f, textPaint);
         }
     }
 
@@ -1127,7 +1209,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback {
             dogeR = w * 0.085f;
             beeR = w * 0.019f;
             lineR = w * 0.013f;
-            maxStrokeOff = w * 0.06f;
+            maxStrokeOff = w * 0.32f;
             clouds.clear();
             for (int i = 0; i < 4; i++) {
                 Cloud cl = new Cloud();

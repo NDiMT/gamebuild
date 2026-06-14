@@ -40,7 +40,7 @@ sed 's/<manifest /<manifest package="gr.happyonline.doge" /' \
     -I "$ANDROID_JAR" \
     --manifest "$OUT/AndroidManifest.xml" \
     --min-sdk-version 21 --target-sdk-version 30 \
-    --version-code 3 --version-name 1.2 \
+    --version-code 4 --version-name 1.3 \
     --java "$OUT/gen" \
     -o "$OUT/apk/base.apk" \
     "$OUT/res.zip"
